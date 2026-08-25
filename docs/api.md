@@ -1,0 +1,223 @@
+# 秋招投递助手 API 契约（M1）
+
+版本：v1.1（对应架构文档 v1.0 / PRD v0.6）
+> v1.1 修订（PRD v0.6 §4.12）：新增公司批量导入、按公司名自动补全（映射表 + 搜索兜底）三个端点及 resolve 异步任务。
+Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF-8）。
+
+## 通用约定
+
+- 鉴权：除 `GET /api/boot` 外，所有请求携带 `X-Auth-Token: <token>`（token 来自 boot，重启后重新生成）。
+- 列表响应统一：`{ "items": [...], "total": n }`；单资源响应直接返回对象。
+- 统一错误结构（HTTP 4xx/5xx）：
+
+```json
+{ "error": { "code": "NOT_FOUND", "message": "岗位不存在", "details": { "id": "..." } } }
+```
+
+| HTTP | code | 含义 |
+|---|---|---|
+| 400 | VALIDATION_ERROR | 请求体/参数校验失败 |
+| 401 | UNAUTHORIZED | token 缺失或错误 |
+| 403 | FORBIDDEN | Host/Origin 校验失败 |
+| 404 | NOT_FOUND | 资源不存在 |
+| 409 | CONFLICT | 冲突（公司名重复等） |
+| 422 | IMPORT_ERROR | 导入文件非法（字段缺失/版本过高） |
+| 500 | INTERNAL_ERROR | 服务器内部错误 |
+
+时间格式：`YYYY-MM-DD`（date 字段）/ `YYYY-MM-DDTHH:MM:SS`（datetime 字段，本地时区）。
+
+---
+
+## 系统
+
+### GET /api/boot
+无 token。返回：
+
+```json
+{
+  "token": "hex64",
+  "schema_version": 1,
+  "app": { "name": "秋招投递助手", "version": "0.1.0" },
+  "backup": { "last_exported_at": null, "days_since": null, "need_backup": false }
+}
+```
+
+`backup` 为启动备份提醒（距上次导出 >7 天提示，X-3）。
+
+---
+
+## 岗位 jobs
+
+### GET /api/jobs
+查询参数（均可选）：`status`（多值逗号分隔）、`company`、`city`、`industry`、`channel`、`keyword`（匹配 company/position，LIKE）、`include_ended`（bool，默认 false 过滤终态）、`sort`（默认 `updated_at desc`，白名单：company/updated_at/deadline/applied_at/created_at/status/position）、`sort_dir`。
+响应 `{items, total}`，item 不含 events。
+
+### POST /api/jobs
+请求体（仅 `company` 必填）：`company, company_id, position, job_type, degree, city, industry, channel, job_url, source_job_id, publish_date, deadline, resume_id`。
+响应 201 + 完整 job（status 默认 `待投递`，含 created_at/updated_at）。
+
+### GET /api/jobs/{id}
+详情：job 对象 + `events` 数组（时间线，按 time 升序）。
+
+### PUT /api/jobs/{id}
+部分更新，仅更新传入字段并刷新 `updated_at`；`status`/`ended_at` 不经此接口（走流转接口）。返回完整 job。
+
+### DELETE /api/jobs/{id}
+硬删除（级联删 job_events），响应 204。
+
+### POST /api/jobs/batch-delete
+请求体 `{ "ids": ["..."] }`，响应 `{ "deleted": n }`。
+
+### POST /api/jobs/{id}/status
+请求体：`{ "status": "笔试", "note": "...", "time": "2026-08-24T10:00:00" }`（time 可选，默认服务端当前时间）。
+响应 200：`{ "job": {...}, "event": {...} }`。
+业务规则：同状态流转 `event` 为 null 且不写事件；进终态写 `ended_at`，回退清 `ended_at`；进入「已投递」记 `applied_at`（不覆盖已有值）；非法状态 400。
+
+### POST /api/jobs/import
+抓取/批量导入岗位（去重）。请求体：
+
+```json
+{ "company_id": "uuid", "jobs": [ { "position": "...", "city": "...", "job_url": "...",
+  "source_job_id": "...", "deadline": null, "degree": "本科", "job_type": "校招" } ] }
+```
+
+响应 200：`{ "added": n, "skipped": m, "failed": k, "added_ids": [...], "failures": [...] }`。
+去重规则：先按 `source_job_id`（限定同一公司）命中跳过；无 source_job_id 时按 公司 + 规范化岗位名 + city 判定（规范化：去【】批次前缀、去「急聘/热招」后缀、去空格与全半角差异）。导入成功后回写公司 `last_fetched_at` / `last_fetch_result`（"新增 N 条，跳过 M 条，失败 K 条"）。
+
+---
+
+## 简历 resumes
+
+### GET /api/resumes
+响应 `{items, total}`。
+
+### POST /api/resumes
+请求体：`name`（必填）、`basic`（必填：name/phone/email/target_position/city）、`education`、`experience`、`projects`、`skills`、`summary`。
+响应 201 + resume。
+
+### GET /api/resumes/{id} / PUT /api/resumes/{id}
+详情 / 部分更新（刷新 updated_at）。
+
+### DELETE /api/resumes/{id}
+若被岗位引用且未 `?force=true`：返回 `{ "referenced_by": n, "deleted": false }` 供二次确认；
+`?force=true` 后删除并将引用岗位的 resume_id/resume_name 置空，响应 204。
+
+---
+
+## 公司 companies
+
+### GET /api/companies
+响应 `{items, total}`。
+
+### POST /api/companies
+请求体 `{ "name": "...", "website": "...", "industry": null, "notes": null }`；`name` 重复返回 409 CONFLICT。响应 201 + company。
+
+### POST /api/companies/import
+公司批量导入（PRD 4.12，txt 每行一个公司名由前端拆行后传入）。请求体：
+
+```json
+{ "names": ["字节跳动", "美团", "美团"], "resolve": false }
+```
+
+规则：忽略空行与首尾空格；批内按公司名归一化（去「有限公司/股份/（中国）」后缀）去重；与已有公司归一化重名则跳过并计数。创建的公司 `website` 为空（待补全）。
+
+- `resolve=false`：响应 200：
+  ```json
+  { "added": 2, "skipped": 1, "skipped_names": ["美团"], "added_ids": ["uuid", "uuid"] }
+  ```
+- `resolve=true`：同步创建后启动异步批量补全任务（type=`resolve`），响应 200 在上一结构基础上附加 `"job_id": "uuid"`；若全部跳过则不产生任务（无 `job_id` 字段）。补全结果自动写入缺失字段（仅填充 `website/industry/career_url` 为空的字段，不覆盖已有值，防误配覆盖手填数据）。
+
+### POST /api/companies/batch-delete
+批量删除公司。请求体 `{ "ids": ["uuid", "..."] }`。响应 200 `{ "deleted": n }`。先解除关联岗位（岗位保留、`company_id` 置空），再物理删除；不存在的 id 忽略。
+
+### POST /api/companies/batch-probe
+批量探测招聘入口（与单条 probe 语义一致）。请求体 `{ "ids": ["uuid", "..."] }`。响应 202 `{ "job_id": "uuid", "type": "probe_batch" }`。逐公司写 `probe_status`（有候选「成功」/ 无候选「需人工」），`career_url` 仅在公司缺失时写入最高置信度候选；单公司失败不阻塞其余。空 ids 返回 400 VALIDATION_ERROR。
+
+### POST /api/companies/batch-resolve
+批量补全已存公司（与 import 的 resolve 任务同一实现）。请求体 `{ "ids": ["uuid", "..."] }`。响应 202 `{ "job_id": "uuid", "type": "resolve" }`。结果自动写入缺失字段（不覆盖已有值）；单公司失败不阻塞其余。空 ids 返回 400 VALIDATION_ERROR。
+
+### POST /api/companies/resolve
+仅凭公司名称自动补全（PRD 4.12，不落库）。请求体 `{ "name": "字节跳动" }`。响应 200：
+
+```json
+{ "name": "字节跳动", "website": "https://www.bytedance.com",
+  "industry": "互联网", "career_url": "https://jobs.bytedance.com/",
+  "source": "mapping" }
+```
+
+- 命中内置映射表（覆盖主流大厂/国企/外企，支持别名与归一化匹配）→ `source: "mapping"`，`career_url` 直接给。
+- 未命中走 Bing 搜索兜底（复用抓取限速：固定 UA、单请求 10s、同域 ≥1.5s、全局 ≤30 请求/分钟）→ `source: "search"`。Bing 对长中文公司名存在搜索碎片化，因此**只接受「官网首页标题/文本包含公司名核心串」的候选**（过滤搜索引擎/内容平台/政府/字典/工商查询/招聘站等非官网域名），`website` 为通过校验的主域名，`career_url` 为 probe 最高置信度候选或 null，`industry` 从搜索结果摘要/官网首页文本关键词匹配，匹配不到为 null。
+- 搜索失败或未找到可靠官网 → `source: "failed"`，附加 `"error": "未找到可靠官网，请手动填写"`，website/industry/career_url 为 null（**不写入任何字段**，防误配）。
+- 空 `name` 返回 400 VALIDATION_ERROR。
+
+### POST /api/companies/{id}/resolve
+对已有公司执行同样补全（不落库）。响应同构（含 `company_id`）：
+
+```json
+{ "company_id": "uuid", "name": "腾讯", "website": "https://www.tencent.com",
+  "industry": "互联网", "career_url": "https://careers.tencent.com/", "source": "mapping" }
+```
+
+公司不存在返回 404 NOT_FOUND。
+
+### GET/PUT/DELETE /api/companies/{id}
+详情 / 更新（可人工修正 `career_url` 等）/ 删除（不删岗位，岗位 company_id 置空），删除 204。
+
+### POST /api/companies/{id}/probe
+异步探测招聘入口。响应 202 `{ "job_id": "uuid", "type": "probe" }`。
+
+### POST /api/companies/{id}/fetch
+异步抓取岗位。请求体可选 `{ "career_url": "https://..." }`（不传用公司已存 career_url）。响应 202 `{ "job_id": "uuid", "type": "fetch" }`。
+
+---
+
+## 任务 tasks
+
+### GET /api/tasks/{job_id}
+轮询：`{ "job_id", "type", "status": "queued|running|done|failed", "progress", "result", "error" }`。
+
+- probe 的 result：`{ "candidates": [ { "url", "confidence": "high|medium|low", "source": "homepage|sitemap|subdomain|existing", "reason" } ] }`
+- fetch 的 result：`{ "ats_type": "greenhouse|lever|feishu|jsonld", "career_url", "job_candidates": [ { "position", "city", "job_url", "source_job_id", "deadline", "degree", "job_type" } ], "count" }`
+- resolve 的 result（批量自动补全，结果自动写入缺失字段）：`{ "results": [ { "company_id", "name", "website", "industry", "career_url", "source": "mapping|search|failed", "error?" } ], "resolved": n, "total": m }`；progress 为「已补全 x/m」。
+- probe_batch 的 result：`{ "results": [ { "company_id", "name", "status": "成功|需人工|failed", "career_url?", "error?" } ], "ok": n, "manual": n, "failed": n, "total": m }`；progress 为「已探测 x/m」。
+- error：`{ "code": "ROBOTS_DISALLOW|TIMEOUT|NO_CAREER_URL|HTTP_ERROR|...", "message" }`
+
+任务失败时公司 `probe_status=需人工`；抓取超时 `last_fetch_result="超时，请手动录入"`。
+
+---
+
+## 备份 backup
+
+### GET /api/backup/export
+全量备份：`{ "schema_version": 1, "exported_at": "...", "jobs": [...], "companies": [...], "resumes": [...] }`。
+导出后记录上次导出时间（供启动备份提醒）。
+
+### POST /api/backup/import
+请求体：`{ "schema_version": 1, "mode": "merge|overwrite", "jobs": [...], "companies": [...], "resumes": [...] }`。
+响应 200：`{ "mode", "jobs_added", "jobs_skipped", "companies_added", "resumes_added", "errors": [] }`。
+规则：
+- 校验 schema_version（高于当前支持版本 → 422）、必填字段（job: id/company；company: id/name/website；resume: id/name/basic.name），非法 422 且不改动现有数据。
+- merge：同 id 以本机为准跳过并计 skipped；公司名冲突跳过记入 errors。
+- overwrite：全量替换（前端二次确认）；备份内不存在的公司/简历引用置空（不违反外键）；同 id 岗位保留本机时间线（备份不含 events）。
+
+---
+
+## 统计 stats
+
+### GET /api/stats
+口径按 PRD 4.8：
+
+```json
+{
+  "total_applied": 40, "active": 20, "offered": 2, "rejected": 5, "pending_followup": 3,
+  "funnel": [ { "status": "已投递", "count": 40 } ],
+  "channel_dist": [ { "channel": "官网", "count": 30 } ],
+  "weekly_trend": [ { "week_start": "2026-08-17", "count": 8 } ]
+}
+```
+
+- total_applied = 已投递及之后状态（不含「待投递」）
+- active = 已投递 ~ 三面/HR面（非终态）
+- offered = 已Offer；rejected = 已拒绝 + 已放弃
+- pending_followup = 进行中且距上次流转 >3 天
+- funnel 从「已投递」起、不含「待投递」；weekly_trend 近 4 周按 applied_at（周一为周起点）

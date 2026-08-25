@@ -1,0 +1,9 @@
+# JobPulse 招聘情报 —— CLI 建模/NLP 流水线（python -m market.cli model / nlp / viz / report）
+# 本机 Python 3.13 已装版本：xgboost 3.4.1 / scikit-learn 1.8.0 / jieba 0.42.1 /
+#   wordcloud 1.9.6 / matplotlib 3.10.8 / openpyxl 3.1.2
+xgboost>=2.0,<4.0
+scikit-learn>=1.3,<2.0
+jieba>=0.42.0
+wordcloud>=1.9.0
+matplotlib>=3.8,<4.0
+openpyxl>=3.1,<4.0      # 兜底数据集 xlsx 读取（crawler/backup.py）

@@ -1,0 +1,100 @@
+# JobPulse 招聘情报站 — 全局配置（合并后版本）
+# 敏感信息（DB 密码）通过环境变量 DB_PASSWORD 注入（或 .env 文件，不入 git），此处无密码
+#
+# 路径约定：所有相对路径相对 backend/（cd backend 后运行 python -m market.cli / run.py）；
+# 运行产物统一落在 backend/market/output、backend/market/data、backend/market/logs。
+
+database:
+  # 合并决策：存储统一 SQLite，与宿主 A 共用 data/app.db（WAL，两套访问层共存）。
+  # 可用环境变量 APP_DB_PATH 覆盖库文件路径（与 A 的 config.py 同机制）。
+  driver: sqlite           # mysql | sqlite
+  host: localhost
+  port: 3306
+  user: root
+  password_env: DB_PASSWORD   # 从环境变量读取密码（不硬编码，见 market/config.py）
+  name: jobpulse
+  charset: utf8mb4
+  sqlite_path: data/app.db    # 相对 backend/，与 A 共用同一库文件（原 jobpulse.db 不再使用）
+
+crawler:
+  # 10 城（统一不带"市"后缀）
+  cities:
+    - 北京
+    - 上海
+    - 广州
+    - 深圳
+    - 杭州
+    - 成都
+    - 南京
+    - 武汉
+    - 西安
+    - 苏州
+  # 岗位大类 -> 搜索关键词（附录 11.2 映射，唯一依据）
+  categories:
+    数据分析: [数据分析, 数据分析师]
+    数据科学: [数据科学]
+    大数据: [大数据开发, 大数据工程师]
+    算法: [算法工程师, 机器学习]
+    BI数仓: [BI工程师, 数据仓库]
+  # 反爬参数（REQ-DC-02）
+  delay_min: 2
+  delay_max: 5
+  retry_times: 3
+  retry_backoff: 2.0        # 指数退避基数（秒）
+  page_size: 50
+  max_pages_per_keyword: 10
+  # 实时数据源（2026-02 实测可用；keywords 复用上方 categories 展开）
+  live_sources:
+    iguopin:                # 国聘网（gp-api 公开接口，国企央企岗位）
+      page_size: 50
+      max_pages: 3
+    nowcoder:               # 牛客网（nowpick 公开接口，校招/实习/社招）
+      page_size: 20
+      max_pages: 5
+  # 健康监控告警阈值（REQ-DC-07）
+  alert_hit_rate: 0.30      # 整体命中率低于该值告警
+  # checkpoint（REQ-DC-04）
+  checkpoint_dir: market/data/checkpoints
+  # 兜底数据源
+  backup_dataset: market/data/raw/job_posting_data.xlsx   # 兜底数据集文件路径（Rayair019/Job-posting-data，2025 中国平台岗位；文件需自行放置）
+  backup_source_id: backup
+
+etl:
+  random_seed: 42           # REQ-DQ-05 可复现固定种子
+  industry_threshold: 50    # 行业低频归并阈值（REQ-DQ-02）
+
+nlp:
+  skill_words_path: market/config/skill_words.json
+  stopwords_path: market/config/stopwords.txt
+  userdict_path: market/config/userdict.txt
+  top_k: 30                 # 技能 Top30（REQ-NLP-03）
+
+model:
+  test_size: 0.2            # 8:2 划分（REQ-ML-02）
+  random_state: 42
+  xgboost_params:
+    n_estimators: 400
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+
+viz:
+  dashboard_output: market/output/dashboard/jobpulse_dashboard.html
+
+api:
+  host: 127.0.0.1        # REST API 监听地址（合并后主入口为宿主 run.py；此处仅 CLI api 子命令使用）
+  port: 8000
+
+paths:
+  data_dir: market/data
+  output_dir: market/output
+  charts_dir: market/output/charts
+  reports_dir: market/output/reports
+  model_dir: market/output/model                      # 在线预测模型导出目录
+  features_path: market/output/analysis/features.parquet   # REQ-NLP-05
+  report_path: market/output/reports/report.md             # REQ-DEL-02
+  dq_report_path: market/output/reports/data_quality_report.md   # REQ-DQ-03
+  model_eval_path: market/output/reports/model_evaluation.md     # REQ-DEL-04
+  logs_dir: market/logs

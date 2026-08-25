@@ -1,0 +1,38 @@
+{
+ "charts": {
+  "city_job_count": "output\\charts\\eda_city_job_count.png",
+  "category_dist": "output\\charts\\eda_category_dist.png",
+  "industry_top": "output\\charts\\eda_industry_top.png",
+  "edu_salary": "output\\charts\\eda_edu_salary.png",
+  "exp_salary": "output\\charts\\eda_exp_salary.png",
+  "city_salary": "output\\charts\\eda_city_salary.png",
+  "category_salary": "output\\charts\\eda_category_salary.png",
+  "city_category_heatmap": "output\\charts\\eda_city_category_heatmap.png"
+ },
+ "insights": [
+  {
+   "title": "北京是数据分析/数据科学岗位最集中的城市",
+   "detail": "北京有效岗位 3270 条，占全部有效记录 44.3%（样本 N=7387，口径：10 城有效岗位）"
+  },
+  {
+   "title": "城市薪资差异明显：上海 中位数最高、西安 最低",
+   "detail": "上海 月薪中位数 25,000 元 vs 西安 11,375 元，差距 2.2 倍（口径：全职岗位 salary_avg 中位数，样本 N=7387）"
+  },
+  {
+   "title": "大数据 岗薪资中位数最高",
+   "detail": "大数据 月薪中位数 22,500 元（样本 807 条），高于最低的 数据科学（16,000 元）41%（口径：全职岗位中位数）"
+  },
+  {
+   "title": "硕士学历薪资显著高于本科",
+   "detail": "硕士月薪中位数 22,500 元 vs 本科 18,083 元，硕士溢价 24%（口径：全职岗位中位数，样本 本科 2269 / 硕士 845）"
+  },
+  {
+   "title": "经验积累带来薪资跃升",
+   "detail": "5-10 年经验月薪中位数 38,750 元，是 1-3 年（18,812 元）的 2.1 倍（口径：全职岗位中位数）"
+  },
+  {
+   "title": "实习薪资：算法岗最高",
+   "detail": "实习岗位 177 条（薪资可解析），月薪中位数 17,500 元；算法类实习中位数 24,000 元（口径：实习岗日薪×20 折月薪，4.3 规则 7）"
+  }
+ ]
+}

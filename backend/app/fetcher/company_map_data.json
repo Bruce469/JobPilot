@@ -1,0 +1,1093 @@
+[
+  {
+    "name": "字节跳动",
+    "aliases": [
+      "字节",
+      "ByteDance",
+      "bytedance"
+    ],
+    "website": "https://www.bytedance.com",
+    "career_url": "https://jobs.bytedance.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "腾讯",
+    "aliases": [
+      "腾讯公司",
+      "Tencent",
+      "tencent"
+    ],
+    "website": "https://www.tencent.com",
+    "career_url": "https://careers.tencent.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "阿里巴巴",
+    "aliases": [
+      "阿里",
+      "阿里巴巴集团",
+      "Alibaba",
+      "alibaba"
+    ],
+    "website": "https://www.alibaba.com",
+    "career_url": "https://campus.alibaba.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "美团",
+    "aliases": [
+      "美团点评",
+      "Meituan",
+      "meituan"
+    ],
+    "website": "https://www.meituan.com",
+    "career_url": "https://zhaopin.meituan.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "拼多多",
+    "aliases": [
+      "PDD",
+      "Pinduoduo",
+      "pinduoduo"
+    ],
+    "website": "https://www.pinduoduo.com",
+    "career_url": "https://careers.pinduoduo.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "京东",
+    "aliases": [
+      "京东集团",
+      "JD",
+      "jd",
+      "JD.com"
+    ],
+    "website": "https://www.jd.com",
+    "career_url": "https://campus.jd.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "网易",
+    "aliases": [
+      "网易公司",
+      "NetEase",
+      "netease"
+    ],
+    "website": "https://www.163.com",
+    "career_url": "https://hr.163.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "百度",
+    "aliases": [
+      "Baidu",
+      "baidu"
+    ],
+    "website": "https://www.baidu.com",
+    "career_url": "https://talent.baidu.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "快手",
+    "aliases": [
+      "Kuaishou",
+      "kuaishou"
+    ],
+    "website": "https://www.kuaishou.com",
+    "career_url": "https://zhaopin.kuaishou.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "哔哩哔哩",
+    "aliases": [
+      "B站",
+      "Bilibili",
+      "bilibili"
+    ],
+    "website": "https://www.bilibili.com",
+    "career_url": "https://jobs.bilibili.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "小红书",
+    "aliases": [
+      "Xiaohongshu",
+      "xiaohongshu",
+      "RED"
+    ],
+    "website": "https://www.xiaohongshu.com",
+    "career_url": "https://job.xiaohongshu.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "滴滴",
+    "aliases": [
+      "滴滴出行",
+      "DiDi",
+      "didi"
+    ],
+    "website": "https://www.didiglobal.com",
+    "career_url": "https://talent.didiglobal.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "携程",
+    "aliases": [
+      "携程旅行",
+      "Trip.com",
+      "ctrip"
+    ],
+    "website": "https://www.ctrip.com",
+    "career_url": "https://career.trip.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "米哈游",
+    "aliases": [
+      "miHoYo",
+      "mihoyo",
+      "米忽悠"
+    ],
+    "website": "https://www.mihoyo.com",
+    "career_url": "https://join.mihoyo.com/",
+    "industry": "互联网"
+  },
+  {
+    "name": "360",
+    "aliases": [
+      "奇虎360",
+      "三六零",
+      "360公司",
+      "qihu360"
+    ],
+    "website": "https://www.360.cn",
+    "career_url": "https://campus.360.cn/",
+    "industry": "科技"
+  },
+  {
+    "name": "华为",
+    "aliases": [
+      "华为技术",
+      "Huawei",
+      "huawei"
+    ],
+    "website": "https://www.huawei.com",
+    "career_url": "https://career.huawei.com/",
+    "industry": "通信"
+  },
+  {
+    "name": "小米",
+    "aliases": [
+      "小米集团",
+      "Xiaomi",
+      "xiaomi"
+    ],
+    "website": "https://www.mi.com",
+    "career_url": "https://hr.xiaomi.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "OPPO",
+    "aliases": [
+      "Oppo",
+      "oppo",
+      "欧珀"
+    ],
+    "website": "https://www.oppo.com",
+    "career_url": "https://careers.oppo.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "vivo",
+    "aliases": [
+      "Vivo",
+      "维沃"
+    ],
+    "website": "https://www.vivo.com",
+    "career_url": "https://hr.vivo.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "荣耀",
+    "aliases": [
+      "Honor",
+      "honor"
+    ],
+    "website": "https://www.honor.com",
+    "career_url": "https://www.honor.com/cn/careers/",
+    "industry": "科技"
+  },
+  {
+    "name": "中兴",
+    "aliases": [
+      "中兴通讯",
+      "ZTE",
+      "zte"
+    ],
+    "website": "https://www.zte.com.cn",
+    "career_url": "https://job.zte.com.cn/",
+    "industry": "通信"
+  },
+  {
+    "name": "联想",
+    "aliases": [
+      "Lenovo",
+      "lenovo"
+    ],
+    "website": "https://www.lenovo.com",
+    "career_url": "https://talent.lenovo.com.cn/",
+    "industry": "科技"
+  },
+  {
+    "name": "大疆",
+    "aliases": [
+      "大疆创新",
+      "DJI",
+      "dji"
+    ],
+    "website": "https://www.dji.com",
+    "career_url": "https://we.dji.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "海康威视",
+    "aliases": [
+      "Hikvision",
+      "hikvision"
+    ],
+    "website": "https://www.hikvision.com",
+    "career_url": "https://campushr.hikvision.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "京东方",
+    "aliases": [
+      "BOE",
+      "boe"
+    ],
+    "website": "https://www.boe.com",
+    "career_url": "https://campus.boe.com/",
+    "industry": "制造"
+  },
+  {
+    "name": "TCL",
+    "aliases": [
+      "TCL科技",
+      "tcl"
+    ],
+    "website": "https://www.tcl.com",
+    "career_url": "https://hr.tcl.com/",
+    "industry": "制造"
+  },
+  {
+    "name": "苹果",
+    "aliases": [
+      "苹果公司",
+      "Apple",
+      "apple"
+    ],
+    "website": "https://www.apple.com.cn",
+    "career_url": "https://www.apple.com/careers/",
+    "industry": "科技"
+  },
+  {
+    "name": "比亚迪",
+    "aliases": [
+      "比亚迪汽车",
+      "BYD",
+      "byd"
+    ],
+    "website": "https://www.byd.com",
+    "career_url": "https://job.byd.com/",
+    "industry": "汽车"
+  },
+  {
+    "name": "宁德时代",
+    "aliases": [
+      "CATL",
+      "catl",
+      "宁德新能源"
+    ],
+    "website": "https://www.catl.com",
+    "career_url": "https://www.catl.com/careers/",
+    "industry": "能源"
+  },
+  {
+    "name": "理想汽车",
+    "aliases": [
+      "理想",
+      "LiAuto",
+      "lixiang"
+    ],
+    "website": "https://www.lixiang.com",
+    "career_url": "https://www.lixiang.com/careers/",
+    "industry": "汽车"
+  },
+  {
+    "name": "蔚来",
+    "aliases": [
+      "NIO",
+      "nio"
+    ],
+    "website": "https://www.nio.cn",
+    "career_url": "https://nio.jobs.feishu.cn/",
+    "industry": "汽车"
+  },
+  {
+    "name": "小鹏汽车",
+    "aliases": [
+      "小鹏",
+      "XPeng",
+      "xpeng"
+    ],
+    "website": "https://www.xpeng.com",
+    "career_url": "https://campus.xiaopeng.com/",
+    "industry": "汽车"
+  },
+  {
+    "name": "特斯拉",
+    "aliases": [
+      "Tesla",
+      "tesla"
+    ],
+    "website": "https://www.tesla.cn",
+    "career_url": "https://www.tesla.cn/careers",
+    "industry": "汽车"
+  },
+  {
+    "name": "吉利",
+    "aliases": [
+      "吉利汽车",
+      "吉利控股",
+      "Geely",
+      "geely"
+    ],
+    "website": "https://www.geely.com",
+    "career_url": "https://campus.geely.com/",
+    "industry": "汽车"
+  },
+  {
+    "name": "长城汽车",
+    "aliases": [
+      "长城",
+      "GWM",
+      "gwm"
+    ],
+    "website": "https://www.gwm.com.cn",
+    "career_url": "https://campus.gwm.com.cn/",
+    "industry": "汽车"
+  },
+  {
+    "name": "长安汽车",
+    "aliases": [
+      "长安",
+      "Changan",
+      "changan"
+    ],
+    "website": "https://www.changan.com.cn",
+    "career_url": "https://campus.changan.com.cn/",
+    "industry": "汽车"
+  },
+  {
+    "name": "上汽集团",
+    "aliases": [
+      "上汽",
+      "SAIC",
+      "saic"
+    ],
+    "website": "https://www.saicmotor.com",
+    "career_url": "https://campus.saicmotor.com/",
+    "industry": "汽车"
+  },
+  {
+    "name": "中金公司",
+    "aliases": [
+      "中金",
+      "CICC",
+      "cicc",
+      "中国国际金融"
+    ],
+    "website": "https://www.cicc.com",
+    "career_url": "https://career.cicc.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "中信证券",
+    "aliases": [
+      "中信",
+      "CITIC Securities",
+      "citics"
+    ],
+    "website": "https://www.citics.com",
+    "career_url": "https://campus.citics.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "招商银行",
+    "aliases": [
+      "招行",
+      "CMB",
+      "cmbchina"
+    ],
+    "website": "https://www.cmbchina.com",
+    "career_url": "https://career.cmbchina.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "工商银行",
+    "aliases": [
+      "工行",
+      "ICBC",
+      "icbc"
+    ],
+    "website": "https://www.icbc.com.cn",
+    "career_url": "https://job.icbc.com.cn/",
+    "industry": "金融"
+  },
+  {
+    "name": "中国银行",
+    "aliases": [
+      "中行",
+      "BOC",
+      "boc"
+    ],
+    "website": "https://www.boc.cn",
+    "career_url": "https://www.boc.cn/aboutboc/bi4/",
+    "industry": "金融"
+  },
+  {
+    "name": "建设银行",
+    "aliases": [
+      "建行",
+      "CCB",
+      "ccb"
+    ],
+    "website": "https://www.ccb.com",
+    "career_url": "https://job.ccb.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "农业银行",
+    "aliases": [
+      "农行",
+      "ABC",
+      "abchina"
+    ],
+    "website": "https://www.abchina.com",
+    "career_url": "https://campus.abchina.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "华泰证券",
+    "aliases": [
+      "华泰",
+      "HTSC",
+      "htsc"
+    ],
+    "website": "https://www.htsc.com.cn",
+    "career_url": "https://campus.htsc.com.cn/",
+    "industry": "金融"
+  },
+  {
+    "name": "国泰君安",
+    "aliases": [
+      "国君",
+      "GTJA",
+      "gtja"
+    ],
+    "website": "https://www.gtja.com",
+    "career_url": "https://campus.gtja.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "中国平安",
+    "aliases": [
+      "平安",
+      "平安集团",
+      "PingAn",
+      "pingan"
+    ],
+    "website": "https://www.pingan.com",
+    "career_url": "https://campus.pingan.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "蚂蚁集团",
+    "aliases": [
+      "蚂蚁",
+      "蚂蚁金服",
+      "AntGroup",
+      "antgroup"
+    ],
+    "website": "https://www.antgroup.com",
+    "career_url": "https://talent.antgroup.com/",
+    "industry": "金融"
+  },
+  {
+    "name": "中国石油",
+    "aliases": [
+      "中石油",
+      "CNPC",
+      "cnpc"
+    ],
+    "website": "https://www.cnpc.com.cn",
+    "career_url": "https://zhaopin.cnpc.com.cn/",
+    "industry": "能源"
+  },
+  {
+    "name": "中国石化",
+    "aliases": [
+      "中石化",
+      "Sinopec",
+      "sinopec"
+    ],
+    "website": "https://www.sinopec.com",
+    "career_url": "https://job.sinopec.com/",
+    "industry": "能源"
+  },
+  {
+    "name": "中国移动",
+    "aliases": [
+      "移动",
+      "China Mobile",
+      "chinamobile"
+    ],
+    "website": "https://www.chinamobile.com",
+    "career_url": "https://job.10086.cn/",
+    "industry": "通信"
+  },
+  {
+    "name": "中国电信",
+    "aliases": [
+      "电信",
+      "China Telecom",
+      "chinatelecom"
+    ],
+    "website": "https://www.chinatelecom.com.cn",
+    "career_url": "https://job.chinatelecom.com.cn/",
+    "industry": "通信"
+  },
+  {
+    "name": "中国联通",
+    "aliases": [
+      "联通",
+      "China Unicom",
+      "chinaunicom"
+    ],
+    "website": "https://www.chinaunicom.com.cn",
+    "career_url": "https://campus.10010.com/",
+    "industry": "通信"
+  },
+  {
+    "name": "国家电网",
+    "aliases": [
+      "国网",
+      "State Grid",
+      "sgcc"
+    ],
+    "website": "https://www.sgcc.com.cn",
+    "career_url": "https://zhaopin.sgcc.com.cn/",
+    "industry": "能源"
+  },
+  {
+    "name": "中国烟草",
+    "aliases": [
+      "中国烟草总公司",
+      "CNTC"
+    ],
+    "website": "https://www.tobacco.gov.cn",
+    "career_url": "",
+    "industry": "能源"
+  },
+  {
+    "name": "南方电网",
+    "aliases": [
+      "CSG",
+      "csg"
+    ],
+    "website": "https://www.csg.cn",
+    "career_url": "https://zhaopin.csg.cn/",
+    "industry": "能源"
+  },
+  {
+    "name": "中国建筑",
+    "aliases": [
+      "中建",
+      "CSCEC",
+      "cscec"
+    ],
+    "website": "https://www.cscec.com",
+    "career_url": "https://job.cscec.com/",
+    "industry": "地产"
+  },
+  {
+    "name": "中国邮政",
+    "aliases": [
+      "邮政",
+      "中国邮政集团",
+      "China Post",
+      "chinapost"
+    ],
+    "website": "https://www.chinapost.com.cn",
+    "career_url": "https://campus.chinapost.com.cn/",
+    "industry": "物流"
+  },
+  {
+    "name": "宝洁",
+    "aliases": [
+      "P&G",
+      "PG",
+      "pg",
+      "ProcterGamble"
+    ],
+    "website": "https://www.pg.com.cn",
+    "career_url": "https://www.pgcareers.com/",
+    "industry": "快消"
+  },
+  {
+    "name": "联合利华",
+    "aliases": [
+      "Unilever",
+      "unilever"
+    ],
+    "website": "https://www.unilever.com.cn",
+    "career_url": "https://careers.unilever.com/",
+    "industry": "快消"
+  },
+  {
+    "name": "欧莱雅",
+    "aliases": [
+      "L'Oreal",
+      "Loreal",
+      "LOreal"
+    ],
+    "website": "https://www.loreal.com",
+    "career_url": "https://careers.loreal.com/",
+    "industry": "快消"
+  },
+  {
+    "name": "可口可乐",
+    "aliases": [
+      "CocaCola",
+      "coca-cola",
+      "Coca-Cola"
+    ],
+    "website": "https://www.coca-cola.com.cn",
+    "career_url": "https://www.cocacolacompany.com/careers",
+    "industry": "快消"
+  },
+  {
+    "name": "雀巢",
+    "aliases": [
+      "Nestle",
+      "Nestlé",
+      "nestle"
+    ],
+    "website": "https://www.nestle.com.cn",
+    "career_url": "https://www.nestle.com/careers",
+    "industry": "快消"
+  },
+  {
+    "name": "玛氏",
+    "aliases": [
+      "Mars",
+      "mars"
+    ],
+    "website": "https://www.mars.com",
+    "career_url": "https://www.mars.com/careers",
+    "industry": "快消"
+  },
+  {
+    "name": "伊利",
+    "aliases": [
+      "伊利集团",
+      "Yili",
+      "yili"
+    ],
+    "website": "https://www.yili.com",
+    "career_url": "https://career.yili.com/",
+    "industry": "快消"
+  },
+  {
+    "name": "蒙牛",
+    "aliases": [
+      "蒙牛乳业",
+      "Mengniu",
+      "mengniu"
+    ],
+    "website": "https://www.mengniu.com.cn",
+    "career_url": "https://job.mengniu.com.cn/",
+    "industry": "快消"
+  },
+  {
+    "name": "农夫山泉",
+    "aliases": [
+      "Nongfu Spring",
+      "nongfuspring"
+    ],
+    "website": "https://www.nongfuspring.com",
+    "career_url": "https://careers.nongfuspring.com/",
+    "industry": "快消"
+  },
+  {
+    "name": "普华永道",
+    "aliases": [
+      "普华",
+      "PwC",
+      "pwc",
+      "PricewaterhouseCoopers"
+    ],
+    "website": "https://www.pwccn.com",
+    "career_url": "https://www.pwccn.com/zh/careers.html",
+    "industry": "咨询"
+  },
+  {
+    "name": "德勤",
+    "aliases": [
+      "德勤中国",
+      "Deloitte",
+      "deloitte"
+    ],
+    "website": "https://www.deloitte.com",
+    "career_url": "https://www2.deloitte.com/cn/zh/careers.html",
+    "industry": "咨询"
+  },
+  {
+    "name": "安永",
+    "aliases": [
+      "EY",
+      "ey",
+      "ErnstYoung"
+    ],
+    "website": "https://www.ey.com",
+    "career_url": "https://www.ey.com/zh_cn/careers",
+    "industry": "咨询"
+  },
+  {
+    "name": "毕马威",
+    "aliases": [
+      "KPMG",
+      "kpmg"
+    ],
+    "website": "https://www.kpmg.com",
+    "career_url": "https://home.kpmg/cn/zh/home/careers.html",
+    "industry": "咨询"
+  },
+  {
+    "name": "麦肯锡",
+    "aliases": [
+      "McKinsey",
+      "mckinsey"
+    ],
+    "website": "https://www.mckinsey.com.cn",
+    "career_url": "https://www.mckinsey.com.cn/careers/",
+    "industry": "咨询"
+  },
+  {
+    "name": "波士顿咨询",
+    "aliases": [
+      "BCG",
+      "bcg"
+    ],
+    "website": "https://www.bcg.com",
+    "career_url": "https://careers.bcg.com/",
+    "industry": "咨询"
+  },
+  {
+    "name": "贝恩",
+    "aliases": [
+      "Bain",
+      "bain"
+    ],
+    "website": "https://www.bain.com",
+    "career_url": "https://www.bain.com/careers/",
+    "industry": "咨询"
+  },
+  {
+    "name": "埃森哲",
+    "aliases": [
+      "埃森哲中国",
+      "Accenture",
+      "accenture"
+    ],
+    "website": "https://www.accenture.com",
+    "career_url": "https://www.accenture.com/cn-zh/careers",
+    "industry": "咨询"
+  },
+  {
+    "name": "微软",
+    "aliases": [
+      "微软中国",
+      "Microsoft",
+      "microsoft"
+    ],
+    "website": "https://www.microsoft.com",
+    "career_url": "https://careers.microsoft.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "谷歌",
+    "aliases": [
+      "谷歌中国",
+      "Google",
+      "google"
+    ],
+    "website": "https://www.google.com",
+    "career_url": "https://careers.google.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "亚马逊",
+    "aliases": [
+      "亚马逊中国",
+      "Amazon",
+      "amazon"
+    ],
+    "website": "https://www.amazon.com",
+    "career_url": "https://www.amazon.jobs/",
+    "industry": "互联网"
+  },
+  {
+    "name": "英伟达",
+    "aliases": [
+      "NVIDIA",
+      "nvidia",
+      "辉达"
+    ],
+    "website": "https://www.nvidia.com",
+    "career_url": "https://www.nvidia.com/en-us/about-nvidia/careers/",
+    "industry": "半导体"
+  },
+  {
+    "name": "英特尔",
+    "aliases": [
+      "Intel",
+      "intel"
+    ],
+    "website": "https://www.intel.cn",
+    "career_url": "https://www.intel.com/content/www/us/en/jobs/jobs-at-intel.html",
+    "industry": "半导体"
+  },
+  {
+    "name": "西门子",
+    "aliases": [
+      "Siemens",
+      "siemens"
+    ],
+    "website": "https://www.siemens.com",
+    "career_url": "https://www.siemens.com/global/en/company/jobs.html",
+    "industry": "制造"
+  },
+  {
+    "name": "博世",
+    "aliases": [
+      "博世中国",
+      "Bosch",
+      "bosch"
+    ],
+    "website": "https://www.bosch.com.cn",
+    "career_url": "https://www.bosch.com.cn/careers/",
+    "industry": "制造"
+  },
+  {
+    "name": "SAP",
+    "aliases": [
+      "思爱普",
+      "sap"
+    ],
+    "website": "https://www.sap.com",
+    "career_url": "https://jobs.sap.com/",
+    "industry": "科技"
+  },
+  {
+    "name": "IBM",
+    "aliases": [
+      "国际商业机器",
+      "ibm"
+    ],
+    "website": "https://www.ibm.com",
+    "career_url": "https://www.ibm.com/employment/",
+    "industry": "科技"
+  },
+  {
+    "name": "高盛",
+    "aliases": [
+      "高盛集团",
+      "Goldman Sachs",
+      "goldmansachs"
+    ],
+    "website": "https://www.goldmansachs.com",
+    "career_url": "https://www.goldmansachs.com/careers/",
+    "industry": "金融"
+  },
+  {
+    "name": "美的",
+    "aliases": [
+      "Midea",
+      "midea"
+    ],
+    "website": "https://www.midea.com",
+    "career_url": "https://careers.midea.com/",
+    "industry": "制造"
+  },
+  {
+    "name": "格力",
+    "aliases": [
+      "格力电器",
+      "Gree",
+      "gree"
+    ],
+    "website": "https://www.gree.com.cn",
+    "career_url": "https://campus.gree.com/",
+    "industry": "制造"
+  },
+  {
+    "name": "海尔",
+    "aliases": [
+      "海尔智家",
+      "Haier",
+      "haier"
+    ],
+    "website": "https://www.haier.com",
+    "career_url": "https://campus.haier.net/",
+    "industry": "制造"
+  },
+  {
+    "name": "顺丰",
+    "aliases": [
+      "顺丰速运",
+      "顺丰科技",
+      "SF Express",
+      "sf-express"
+    ],
+    "website": "https://www.sf-express.com",
+    "career_url": "https://campus.sf-express.com/",
+    "industry": "物流"
+  },
+  {
+    "name": "恒瑞医药",
+    "aliases": [
+      "恒瑞",
+      "江苏恒瑞",
+      "Hengrui",
+      "hengrui"
+    ],
+    "website": "https://www.hengrui.com",
+    "career_url": "https://hr.hengrui.com/",
+    "industry": "医药"
+  },
+  {
+    "name": "药明康德",
+    "aliases": [
+      "药明",
+      "WuXi AppTec",
+      "wuxiapptec"
+    ],
+    "website": "https://www.wuxiapptec.com.cn",
+    "career_url": "https://www.wuxiapptec.com.cn/careers/",
+    "industry": "医药"
+  },
+  {
+    "name": "辉瑞",
+    "aliases": [
+      "Pfizer",
+      "pfizer"
+    ],
+    "website": "https://www.pfizer.com.cn",
+    "career_url": "https://www.pfizer.com/careers",
+    "industry": "医药"
+  },
+  {
+    "name": "强生",
+    "aliases": [
+      "强生中国",
+      "J&J",
+      "JohnsonJohnson",
+      "johnson"
+    ],
+    "website": "https://www.jnj.cn",
+    "career_url": "https://www.jnj.com/careers",
+    "industry": "医药"
+  },
+  {
+    "name": "万科",
+    "aliases": [
+      "Vanke",
+      "vanke"
+    ],
+    "website": "https://www.vanke.com",
+    "career_url": "https://campus.vanke.com/",
+    "industry": "地产"
+  },
+  {
+    "name": "保利发展",
+    "aliases": [
+      "保利",
+      "保利地产",
+      "Poly",
+      "poly"
+    ],
+    "website": "https://www.poly.com.cn",
+    "career_url": "https://campus.poly.com.cn/",
+    "industry": "地产"
+  },
+  {
+    "name": "成都银行",
+    "aliases": [
+      "成都银行股份有限公司"
+    ],
+    "website": "https://www.bocd.com.cn",
+    "career_url": null,
+    "industry": "金融"
+  },
+  {
+    "name": "成都农村商业银行",
+    "aliases": [
+      "成都农村商业银行股份有限公司",
+      "成都农商银行"
+    ],
+    "website": "https://www.cdrcb.com",
+    "career_url": null,
+    "industry": "金融"
+  },
+  {
+    "name": "成都云图控股",
+    "aliases": [
+      "成都云图控股股份有限公司",
+      "云图控股"
+    ],
+    "website": "https://www.wintrueholding.com",
+    "career_url": null,
+    "industry": "制造"
+  },
+  {
+    "name": "成都市公共交通集团",
+    "aliases": [
+      "成都市公共交通集团有限公司",
+      "成都公交集团"
+    ],
+    "website": "https://www.cdgjbus.com",
+    "career_url": null,
+    "industry": null
+  },
+  {
+    "name": "成都交通投资集团",
+    "aliases": [
+      "成都交通投资集团有限公司",
+      "成都交投集团"
+    ],
+    "website": "https://www.cdccic.com",
+    "career_url": null,
+    "industry": null
+  },
+  {
+    "name": "成都文旅集团",
+    "aliases": [
+      "成都文化旅游发展集团有限责任公司"
+    ],
+    "website": "http://www.cdctg.com",
+    "career_url": null,
+    "industry": null
+  }
+]

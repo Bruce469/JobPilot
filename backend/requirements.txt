@@ -1,0 +1,17 @@
+# 秋招投递助手 + JobPulse 招聘情报 —— 核心运行依赖（合并后）
+# 说明：market 模块的看板/岗位接口还需 requirements-market.txt；
+#       CLI 建模/NLP 流水线还需 requirements-ml.txt；MySQL 可选 requirements-mysql.txt。
+
+# ---- 宿主 A 原有依赖 ----
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.7.0
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+
+# ---- market 模块基础依赖（与 pandas/numpy 解耦，仅 SQLAlchemy 等）----
+sqlalchemy>=2.0.30        # 兼容 2.0.x（本机 2.0.52）
+pyyaml>=6.0.0
+requests>=2.31.0          # 采集层（crawler/http.py）
+joblib>=1.3.0             # 模型加载（/api/market/predict）
+apscheduler>=3.10.0       # 增量调度（market/scheduler）

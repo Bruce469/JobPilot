@@ -1,0 +1,8 @@
+{
+  "语言/工具": ["Python", "SQL", "Excel", "R", "Java", "Scala", "C++", "C语言", "Shell", "Linux", "Git", "Docker", "Kubernetes", "Redis", "MongoDB", "HBase"],
+  "可视化/BI": ["Tableau", "PowerBI", "Power BI", "ECharts", "FineBI", "Matplotlib", "Seaborn", "Plotly", "Superset", "Looker"],
+  "数据处理": ["pandas", "numpy", "Spark", "Flink", "Hadoop", "Hive", "Kafka", "ClickHouse", "FlinkSQL", "DataX", "Sqoop", "Airflow", "DolphinScheduler", "MapReduce", "Elasticsearch", "Flink CDC"],
+  "机器学习/算法": ["机器学习", "深度学习", "XGBoost", "神经网络", "NLP", "推荐系统", "特征工程", "A/B测试", "决策树", "随机森林", "逻辑回归", "聚类", "分类", "回归", "LSTM", "Transformer", "BERT", "大模型", "LLM", "提示词工程", "强化学习", "CNN", "RNN", "GBDT", "LightGBM", "CatBoost"],
+  "统计/业务": ["数据分析", "数据挖掘", "数据仓库", "数据建模", "报表", "用户画像", "指标体系", "数据可视化", "商业分析", "SQL优化", "数据治理", "ETL", "数据清洗", "AB实验", "归因分析"],
+  "办公/软技能": ["Office", "Word", "PPT", "沟通", "项目管理", "团队协作"]
+}

@@ -1,0 +1,30 @@
+# ZCode 工作区与本地分析产物
+.zcode/
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# 运行数据与日志（个人数据 / 数据集不入库，防二次分发）
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/market/data/
+backend/market/logs/
+backend/backend.log
+*.log
+
+# 环境与临时
+.env
+last_export.json
+*.tmp
+.DS_Store

@@ -1,0 +1,6 @@
+# JobPulse 招聘情报 —— 看板/岗位接口运行必需（/api/market/jobs、/api/market/jobs/summary）
+# 本机 Python 3.13 已装版本：pandas 2.2.3 / numpy 2.2.2 / pyarrow 23.0.1
+# 注：B 原 requirements 写 pandas 3.0.5/numpy 2.5.2，与已装版本差异不影响本套件测试（已在 2.2.x 全量通过）
+pandas>=2.0,<3.0
+numpy>=1.26,<3.0
+pyarrow>=15.0,<24.0

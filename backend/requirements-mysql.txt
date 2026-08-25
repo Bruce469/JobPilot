@@ -1,0 +1,4 @@
+# JobPulse 招聘情报 —— MySQL 驱动（可选）
+# 合并决策：默认存储统一 SQLite（与宿主 A 共用 data/app.db）；若需切回 MySQL，
+# 安装本文件并在 market/config/config.yaml 设置 database.driver=mysql + DB_PASSWORD。
+PyMySQL>=1.1.0

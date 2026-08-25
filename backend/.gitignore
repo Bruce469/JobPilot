@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# 运行数据与日志（合并后 market 模块运行产物）
+market/data/
+market/logs/
+*.log
+
+# SQLite 数据库文件
+data/*.db
+data/*.db-wal
+data/*.db-shm
+market/data/checkpoints/
+last_export.json
+
+# 敏感配置
+.env
+
+# 临时文件
+*.tmp
+.tmp_probe/
