@@ -3,7 +3,7 @@ import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useCompaniesStore } from '@/stores/companies'
 import type { Company, CompanyResolveResult } from '@/types'
-import { INDUSTRIES } from '@/utils/normalize'
+import { COMPANY_NATURES, INDUSTRIES } from '@/utils/normalize'
 
 const props = defineProps<{
   modelValue: boolean
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 
 const companiesStore = useCompaniesStore()
 
-const form = reactive({ website: '', industry: '', career_url: '' })
+const form = reactive({ website: '', industry: '', city: '', nature: '', career_url: '' })
 const saving = ref(false)
 
 watch(
@@ -28,6 +28,8 @@ watch(
     // 补全结果优先，缺失字段回退公司已有值
     form.website = props.result.website || props.company.website || ''
     form.industry = props.result.industry || props.company.industry || ''
+    form.city = props.result.city || props.company.city || ''
+    form.nature = props.result.nature || props.company.nature || ''
     form.career_url = props.result.career_url || props.company.career_url || ''
   },
 )
@@ -38,6 +40,8 @@ async function onSave() {
   try {
     const payload: Record<string, string | null> = {
       industry: form.industry.trim() || null,
+      city: form.city.trim() || null,
+      nature: form.nature.trim() || null,
       career_url: form.career_url.trim() || null,
     }
     if (form.website.trim()) payload.website = form.website.trim()
@@ -75,9 +79,9 @@ function close() {
     />
     <el-alert
       v-else-if="result?.source === 'search'"
-      type="warning"
+      :type="result.confidence === 'medium' ? 'error' : 'warning'"
       :closable="false"
-      title="结果来自网络搜索，请核对后再保存"
+      :title="result.confidence === 'medium' ? '结果来自网络搜索且置信度较低，请务必核对后再保存' : '结果来自网络搜索，请核对后再保存'"
       class="result-alert"
     />
     <el-alert
@@ -103,6 +107,22 @@ function close() {
           style="width: 100%"
         >
           <el-option v-for="i in INDUSTRIES" :key="i" :label="i" :value="i" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="城市">
+        <el-input v-model="form.city" placeholder="可选，如：北京" clearable />
+      </el-form-item>
+      <el-form-item label="公司性质">
+        <el-select
+          v-model="form.nature"
+          placeholder="可选"
+          clearable
+          filterable
+          allow-create
+          default-first-option
+          style="width: 100%"
+        >
+          <el-option v-for="n in COMPANY_NATURES" :key="n" :label="n" :value="n" />
         </el-select>
       </el-form-item>
       <el-form-item label="招聘页链接">

@@ -16,8 +16,9 @@ JOB_COLS = (
     "status", "ended_at", "resume_id", "resume_name", "notes", "created_at", "updated_at",
 )
 COMPANY_COLS = (
-    "id", "name", "website", "career_url", "industry", "probe_status",
-    "ats_type", "notes", "last_fetched_at", "last_fetch_result", "created_at",
+    "id", "name", "website", "career_url", "industry", "city", "nature",
+    "probe_status", "ats_type", "notes", "last_fetched_at", "last_fetch_result",
+    "created_at",
 )
 RESUME_COLS = (
     "id", "name", "basic", "education", "experience", "projects", "skills",
@@ -251,9 +252,25 @@ def get_company_by_name(name: str):
     return dict(row) if row else None
 
 
-def list_companies():
+def list_companies(filters: dict | None = None) -> list:
+    filters = filters or {}
+    conds, params = [], []
+    if filters.get("city"):
+        conds.append("city LIKE ?")
+        params.append(f"%{filters['city']}%")
+    for col in ("industry", "nature"):
+        if filters.get(col):
+            conds.append(f"{col} = ?")
+            params.append(filters[col])
+    if filters.get("keyword"):
+        kw = f"%{filters['keyword']}%"
+        conds.append("name LIKE ?")
+        params.append(kw)
+    where = ("WHERE " + " AND ".join(conds)) if conds else ""
     with closing(get_conn()) as conn:
-        rows = conn.execute("SELECT * FROM companies ORDER BY created_at DESC, id").fetchall()
+        rows = conn.execute(
+            f"SELECT * FROM companies {where} ORDER BY created_at DESC, id", params
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -263,6 +280,7 @@ def create_company(data: dict) -> dict:
     row = {
         "id": cid, "name": data.get("name"), "website": data.get("website"),
         "career_url": data.get("career_url"), "industry": data.get("industry"),
+        "city": data.get("city"), "nature": data.get("nature"),
         "probe_status": data.get("probe_status") or "未探测", "ats_type": data.get("ats_type"),
         "notes": data.get("notes"), "last_fetched_at": data.get("last_fetched_at"),
         "last_fetch_result": data.get("last_fetch_result"),

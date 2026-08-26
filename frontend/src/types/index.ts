@@ -110,6 +110,8 @@ export interface Company {
   website: string
   career_url: string | null
   industry: string | null
+  city: string | null
+  nature: string | null
   probe_status: string | null
   ats_type: string | null
   notes: string | null
@@ -122,6 +124,8 @@ export interface CompanyPayload {
   name: string
   website: string
   industry?: string | null
+  city?: string | null
+  nature?: string | null
   notes?: string | null
 }
 
@@ -131,8 +135,12 @@ export interface CompanyResolveResult {
   name: string
   website: string | null
   industry: string | null
+  city: string | null
+  nature: string | null
   career_url: string | null
-  source: 'mapping' | 'search' | 'failed' | 'skipped'
+  source: 'mapping' | 'search' | 'failed' | 'skipped' | 'info' | 'icp'
+  /** 置信度：mapping/info/icp=high；search 首页校验通过=high，仅搜索上下文命中=medium */
+  confidence?: 'high' | 'medium' | null
   error?: string | null
 }
 

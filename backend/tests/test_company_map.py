@@ -41,5 +41,22 @@ def test_lookup_miss_returns_none():
 
 
 def test_entries_count_in_range():
-    """映射表规模 60–120 家。"""
-    assert 60 <= len(company_map.all_entries()) <= 120
+    """映射表规模：101 家手工精选 + guoyang-pro 央企国企名录合并后约 230+ 家。"""
+    assert 200 <= len(company_map.all_entries()) <= 400
+
+
+def test_entries_have_city_and_nature():
+    """每条映射均含城市与公司性质（供补全写库 / 公司库筛选）。"""
+    for entry in company_map.all_entries():
+        assert entry["city"], f"{entry['name']} 缺 city"
+        assert entry["nature"], f"{entry['name']} 缺 nature"
+
+
+def test_lookup_roster_soe():
+    """guoyang-pro 央企国企名录条目可按简称/别名命中，性质与城市正确。"""
+    e = company_map.lookup("中海油")
+    assert e is not None
+    assert e["name"] == "中国海洋石油集团有限公司"
+    assert e["nature"] == "央企" and e["city"] == "北京" and e["industry"] == "能源"
+    assert company_map.lookup("上海烟草")["nature"] == "央企"
+    assert company_map.lookup("中央汇金")["city"] == "北京"

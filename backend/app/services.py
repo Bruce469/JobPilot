@@ -204,8 +204,9 @@ def get_company(company_id: str) -> dict:
     return company
 
 
-def list_companies() -> dict:
-    items = dao.list_companies()
+def list_companies(filters: dict | None = None) -> dict:
+    filters = filters or {}
+    items = dao.list_companies(filters)
     return {"items": items, "total": len(items)}
 
 
@@ -217,7 +218,10 @@ def create_company(payload: dict) -> dict:
     if dao.get_company_by_name(name):
         raise conflict("公司名已存在", {"name": name})
     return dao.create_company({"name": name, "website": website,
-                               "industry": payload.get("industry"), "notes": payload.get("notes")})
+                               "industry": payload.get("industry"),
+                               "city": payload.get("city"),
+                               "nature": payload.get("nature"),
+                               "notes": payload.get("notes")})
 
 
 def update_company(company_id: str, fields: dict) -> dict:

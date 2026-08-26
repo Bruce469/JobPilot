@@ -2,8 +2,22 @@ import http from './http'
 import type { Company, CompanyImportSyncResult, CompanyPayload, CompanyResolveResult } from '@/types'
 import type { ListResult } from './jobs'
 
-export function listCompanies(): Promise<ListResult<Company>> {
-  return http.get<ListResult<Company>>('/companies').then((r) => r.data)
+export interface CompanyFilters {
+  city?: string | null
+  industry?: string | null
+  nature?: string | null
+  keyword?: string | null
+}
+
+export function listCompanies(filters?: CompanyFilters): Promise<ListResult<Company>> {
+  const params: Record<string, string> = {}
+  if (filters) {
+    if (filters.city) params.city = filters.city
+    if (filters.industry) params.industry = filters.industry
+    if (filters.nature) params.nature = filters.nature
+    if (filters.keyword) params.keyword = filters.keyword
+  }
+  return http.get<ListResult<Company>>('/companies', { params }).then((r) => r.data)
 }
 
 export function createCompany(payload: CompanyPayload): Promise<Company> {

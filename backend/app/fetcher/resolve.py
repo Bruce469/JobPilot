@@ -15,7 +15,7 @@ from urllib.parse import quote, urlparse
 
 from bs4 import BeautifulSoup
 
-from . import company_map, probe as probe_mod
+from . import company_info, company_map, icp as icp_mod, probe as probe_mod
 from .errors import FetchError, TaskTimeout
 from .http import fetch_text
 from .normalize import normalize_company
@@ -64,7 +64,8 @@ INDUSTRY_KEYWORDS = [
     ("半导体", ["半导体", "芯片", "集成电路", "晶圆", "semiconductor", "chip", "gpu"]),
     ("通信", ["5g", "通信", "通讯", "telecom"]),
     ("汽车", ["汽车", "整车", "智能驾驶", "新能源车", "电动车", "自动驾驶", "autopilot", "vehicle"]),
-    ("金融", ["银行", "证券", "保险", "基金", "投资", "投行", "券商", "金融", "资管", "bank", "investment"]),
+    ("金融", ["银行", "证券", "保险", "基金", "投行", "券商", "金融", "资管",
+              "投资公司", "投资管理", "投资控股", "bank"]),
     ("能源", ["石油", "石化", "电力", "电网", "光伏", "风电", "储能", "能源", "新能源", "energy", "oil"]),
     ("快消", ["快消", "日化", "食品", "饮料", "消费品", "consumer"]),
     ("医药", ["医药", "制药", "生物", "医疗", "健康", "pharma", "biotech", "medical"]),
@@ -86,11 +87,20 @@ def _contains(blob: str, kw: str) -> bool:
 
 
 def match_industry(*texts) -> str | None:
+    """按行业命中计数评分：同一文本里命中关键词数最多的行业胜出，平局按词表顺序取前。
+
+    相比「首个命中即返回」，对整页正文（含投资/食品等噪声词）更稳；
+    调用方应优先传标题/摘要等短文本，整页文本仅作兜底。
+    """
     blob = " ".join(t for t in texts if t).lower()
-    for industry, keywords in INDUSTRY_KEYWORDS:
-        if any(_contains(blob, k) for k in keywords):
-            return industry
-    return None
+    if not blob:
+        return None
+    best = None  # (命中数, 词表序号, 行业)
+    for idx, (industry, keywords) in enumerate(INDUSTRY_KEYWORDS):
+        hits = sum(1 for k in keywords if _contains(blob, k))
+        if hits and (best is None or (hits, -idx) > (best[0], -best[1])):
+            best = (hits, idx, industry)
+    return best[2] if best else None
 
 
 def _host_of(url: str) -> str | None:
@@ -125,23 +135,41 @@ def _core_name(name: str) -> str:
     return core
 
 
-def _verify_site(name: str, url: str, deadline=None) -> str | None:
-    """抓取候选官网首页，确认首页标题/文本包含公司名核心串；通过则返回首页文本（可复用做行业匹配）。"""
+def _verify_site(name: str, url: str, deadline=None) -> tuple[str, str]:
+    """抓取候选官网首页校验公司名核心串（兼容 SPA：正文可能为空，但 meta/OG 标签常服务端渲染了公司名）。
+
+    返回 (status, 首页文本)：
+    - ("ok", text)：标题/描述/OG 标签/正文含核心串，校验通过（可复用 text 做行业/城市/性质提取）；
+    - ("unreachable", "")：抓取失败/超时/解析异常/无可校验文本（纯客户端渲染 SPA）→ 可走中置信通道；
+    - ("mismatch", "")：页面可访问且有内容但整页不含核心串 → 坚决拒绝（不降级为中置信，防误配）。
+    """
     core = _core_name(name)
     if not core:
-        return None
+        return "unreachable", ""
     try:
         html = fetch_text(url + "/", deadline)
     except (FetchError, TaskTimeout):
-        return None
+        return "unreachable", ""
     try:
         soup = BeautifulSoup(html, "html.parser")
-        title = soup.title.get_text(" ", strip=True) if soup.title else ""
-        text = soup.get_text(" ", strip=True)[:30000]
+        parts = []
+        if soup.title:
+            parts.append(soup.title.get_text(" ", strip=True))
+        for meta in soup.find_all("meta"):
+            key = (meta.get("name") or meta.get("property") or "").lower()
+            if key in ("description", "og:title", "og:description", "og:site_name",
+                       "keywords", "application-name"):
+                content = meta.get("content")
+                if content:
+                    parts.append(content)
+        parts.append(soup.get_text(" ", strip=True)[:30000])
     except Exception:
-        return None
-    blob = re.sub(r"\s+", "", title + " " + text)
-    return f"{title}\n{text}" if core in blob else None
+        return "unreachable", ""
+    text = " ".join(p for p in parts if p)
+    if not text.strip():
+        return "unreachable", ""
+    blob = re.sub(r"\s+", "", text)
+    return ("ok", text) if core in blob else ("mismatch", "")
 
 
 def _parse_bing_results(html: str, limit: int = 8) -> list[dict]:
@@ -172,35 +200,122 @@ def _parse_bing_results(html: str, limit: int = 8) -> list[dict]:
     return results
 
 
-def search_fallback(name: str, deadline=None) -> tuple[str | None, str | None]:
-    """Bing 搜索兜底：返回 (website 主域名, industry)；未找到可靠官网返回 (None, None)。
+# Bing 端点：cn 主用（国内可达、不跳转），www 兜底（实测 www 会 302 跳转且偶发连接被重置）。
+BING_ENDPOINTS = ("https://cn.bing.com/search?q=", "https://www.bing.com/search?q=")
+SEARCH_RETRY = 1  # 每个端点的瞬时网络错误重试次数
 
-    只接受「官网首页标题/文本包含公司名核心串」的候选（Bing 对长中文公司名存在搜索碎片化，
-    不校验会匹配到知乎专栏、政府网站、字典等错误页面）；按候选顺序逐家校验，全部不通过则失败。
+
+def _search(query: str, deadline=None) -> str | None:
+    """遍历 Bing 端点取回搜索结果 HTML；瞬时网络错误每端点重试一次。全部失败返回 None。"""
+    last_err = None
+    for endpoint in BING_ENDPOINTS:
+        for attempt in range(SEARCH_RETRY + 1):
+            url = endpoint + quote(query)
+            try:
+                return fetch_text(url, deadline)
+            except (FetchError, TaskTimeout) as exc:
+                last_err = exc
+                logger.info("搜索请求失败 query=%s endpoint=%s attempt=%d %s", query, endpoint, attempt + 1, exc)
+    logger.info("搜索兜底请求全部失败 query=%s %s", query, last_err)
+    return None
+
+
+def search_fallback(name: str, deadline=None) -> dict:
+    """Bing 搜索兜底。返回 {website, industry, confidence, snippet, homepage}；未找到可靠官网 website=None。
+
+    - 只接受「搜索结果标题/摘要包含公司名核心串」的候选（Bing 对长中文公司名存在搜索碎片化，
+      不校验会匹配到知乎专栏、政府网站、字典等错误页面——此类域名同时也在黑名单内）。
+    - 首页校验通过（标题/描述/OG 标签/正文含核心串）→ confidence=high；
+      首页抓取失败/超时/无文本（SPA、反爬、网络问题）但搜索结果上下文已含完整核心串 → confidence=medium，
+      仍需人工核对（source 恒为 search，前端已有警示）。
     """
-    queries = [f"{name} 官网"]
-    stripped = normalize_company(name)
-    if stripped and stripped != name:
-        queries.append(f"{stripped} 官网")
+    core = _core_name(name)
+    queries = []
+    for q in (f"{name} 官网", f"{core} 官网", f"{core} 公司"):
+        if q and q not in queries:
+            queries.append(q)
     for query in queries:
-        url = "https://www.bing.com/search?q=" + quote(query)
-        try:
-            html = fetch_text(url, deadline)
-        except (FetchError, TaskTimeout) as exc:
-            logger.info("搜索兜底请求失败 name=%s %s", name, exc)
-            return None, None
+        html = _search(query, deadline)
+        if html is None:
+            continue
         for candidate in _parse_bing_results(html):
             website = _origin_of(candidate["url"])
             if not website:
                 continue
-            homepage = _verify_site(name, website, deadline)
-            if homepage is None:
+            host = _host_of(website)
+            if not host or _excluded(host):
                 continue
-            industry = match_industry(candidate["title"], candidate["snippet"])
-            if not industry:
-                industry = match_industry(homepage)
-            return website, industry
-    return None, None
+            snippet = f"{candidate['title']} {candidate['snippet']}".strip()
+            status, homepage = _verify_site(name, website, deadline)
+            if status == "ok":
+                industry = match_industry(candidate["title"], candidate["snippet"])
+                if not industry:
+                    industry = match_industry(homepage)
+                return {"website": website, "industry": industry, "confidence": "high",
+                        "snippet": snippet, "homepage": homepage}
+            if status == "unreachable" and core and core in re.sub(r"\s+", "", snippet):
+                # 首页抓取不到（SPA/反爬/网络问题）但搜索结果上下文已含完整核心串 → 中置信接受
+                return {"website": website, "industry": match_industry(candidate["title"], candidate["snippet"]),
+                        "confidence": "medium", "snippet": snippet, "homepage": None}
+            # status == "mismatch"：页面可访问但不含公司名 → 坚决拒绝，继续下一候选
+    return {"website": None, "industry": None, "confidence": None, "snippet": None, "homepage": None}
+
+
+# ---------------- 摘要/官网文本元数据提取（城市 / 公司性质） ----------------
+
+CITIES = [
+    "北京", "上海", "广州", "深圳", "天津", "重庆", "杭州", "南京", "苏州", "成都", "武汉", "西安",
+    "郑州", "长沙", "沈阳", "青岛", "济南", "大连", "宁波", "厦门", "合肥", "福州", "昆明", "哈尔滨",
+    "长春", "石家庄", "太原", "南昌", "贵阳", "南宁", "兰州", "海口", "乌鲁木齐", "呼和浩特", "银川",
+    "西宁", "拉萨", "东莞", "佛山", "无锡", "常州", "南通", "温州", "嘉兴", "绍兴", "金华", "台州",
+    "珠海", "惠州", "中山", "泉州", "烟台", "徐州", "保定", "临沂", "洛阳", "襄阳", "宜昌", "芜湖",
+    "绵阳", "泸州", "宜宾", "德阳", "乐山", "南充", "达州", "遂宁", "眉山", "自贡", "内江", "攀枝花",
+    "遵义", "桂林", "柳州", "唐山", "邯郸", "沧州", "廊坊", "大庆", "包头", "咸阳", "宝鸡",
+    "潍坊", "淄博", "济宁", "泰安", "威海", "日照", "枣庄", "东营", "漳州", "莆田", "龙岩",
+    "江门", "肇庆", "湛江", "茂名", "汕头", "清远", "韶关", "株洲", "湘潭", "衡阳", "荆州",
+    "黄石", "九江", "赣州", "安庆", "芜湖", "马鞍山", "蚌埠", "宜昌", "襄阳", "洛阳", "徐州",
+    "常州", "南通", "扬州", "镇江", "盐城", "淮安", "连云港", "泰州", "宿迁",
+]
+# 城市上下文指示词：其后的城市更可能是公司总部/注册地所在城市
+CITY_HINT_BEFORE = ("总部", "注册地", "注册地址", "办公地址", "所在地", "位于", "坐落于", "设立于", "成立于", "诞生于")
+NATURE_KEYWORDS = [
+    ("央企", ["央企", "中央企业", "国务院国资委"]),
+    ("国企", ["国企", "国有企业", "国有控股", "国有独资", "国企改革"]),
+    ("事业单位", ["事业单位"]),
+    ("合资", ["合资企业", "中外合资"]),
+    ("外企", ["外企", "外资企业", "外商独资", "跨国公司"]),
+    ("私企", ["民企", "私企", "民营企业", "私营企业", "股份制企业"]),
+]
+
+
+def extract_city(*texts: str) -> str | None:
+    """从搜索摘要/官网文本尽力提取城市：优先「总部/注册地/位于」等上下文附近出现的城市；
+    无上下文指示时取文本中最早出现的城市（公司名常自带地名，如「成都xx科技」）。"""
+    blob = " ".join(t for t in texts if t)
+    first: str | None = None
+    for city in CITIES:
+        idx = blob.find(city)
+        if idx < 0:
+            continue
+        if any(h in blob[max(0, idx - 12):idx] for h in CITY_HINT_BEFORE):
+            return city
+        if first is None:
+            first = city
+    return first
+
+
+def extract_nature(*texts: str) -> str | None:
+    """从搜索摘要/官网文本按关键词匹配公司性质（央企 > 国企 > 事业单位 > 合资 > 外企 > 私企）。"""
+    blob = " ".join(t for t in texts if t)
+    for nature, keywords in NATURE_KEYWORDS:
+        if any(k in blob for k in keywords):
+            return nature
+    return None
+
+
+def extract_meta(*texts: str) -> dict:
+    """综合提取 {industry, city, nature}；提取不到返回 null 对应键。"""
+    return {"industry": match_industry(*texts), "city": extract_city(*texts), "nature": extract_nature(*texts)}
 
 
 def probe_career_url(website: str, deadline=None, light: bool = True) -> str | None:
@@ -218,20 +333,77 @@ def probe_career_url(website: str, deadline=None, light: bool = True) -> str | N
     return candidates[0]["url"]
 
 
+def resolve_from_mapping(name: str) -> dict | None:
+    """仅查内置映射表返回补全结果（不发网络请求）；未命中返回 None。"""
+    entry = company_map.lookup(name)
+    if not entry:
+        return None
+    return {"name": name, "website": entry["website"], "industry": entry["industry"],
+            "city": entry.get("city"), "nature": entry.get("nature"),
+            "career_url": entry.get("career_url") or None, "source": "mapping"}
+
+
+def resolve_from_info(name: str) -> dict | None:
+    """A股上市公司离线库（cninfo，离线）：官网/行业/注册城市；无招聘站与性质。未命中返回 None。"""
+    entry = company_info.lookup(name)
+    if not entry:
+        return None
+    return {"name": name, "website": entry["website"], "industry": entry["industry"],
+            "city": entry.get("city"), "nature": None, "career_url": None, "source": "info"}
+
+
 def resolve_company(name: str, deadline=None) -> dict:
-    """单公司自动补全（不落库）。返回 {name, website, industry, career_url, source, error?}。"""
+    """单公司自动补全（不落库）。返回 {name, website, industry, city, nature, career_url, source, confidence?, error?}。
+
+    四级流水线（source 依次）：mapping（内置映射，含央企国企名录）→ info（A股离线库）→
+    icp（ICP 备案反查，需配置 ICP_API_URL）→ search（Bing 兜底）。
+    城市/公司性质：映射表精确给出；搜索路径从搜索结果摘要/官网文本尽力提取（无法确定时为 null，
+    置信度 low，需人工核对）。
+    - 映射命中且有官网 → 直接返回（最快路径）；
+    - 映射命中但缺官网（如央企国企名录只给了招聘站/元数据）→ 继续搜索补官网，元数据以映射为准；
+    - 未命中映射 → 依次走 A股离线库 / ICP 备案 / Bing 搜索。
+    """
     name = str(name or "").strip()
     if not name:
-        return {"name": name, "website": None, "industry": None, "career_url": None,
-                "source": "failed", "error": "公司名为空"}
-    entry = company_map.lookup(name)
-    if entry:
-        return {"name": name, "website": entry["website"], "industry": entry["industry"],
-                "career_url": entry.get("career_url") or None, "source": "mapping"}
-    website, industry = search_fallback(name, deadline)
-    if not website:
-        return {"name": name, "website": None, "industry": None, "career_url": None,
-                "source": "failed", "error": "未找到可靠官网，请手动填写"}
-    career_url = probe_career_url(website, deadline)
-    return {"name": name, "website": website, "industry": industry,
-            "career_url": career_url, "source": "search"}
+        return {"name": name, "website": None, "industry": None, "city": None, "nature": None,
+                "career_url": None, "source": "failed", "confidence": None, "error": "公司名为空"}
+    mapped = resolve_from_mapping(name)
+    if mapped and mapped.get("website"):
+        mapped["confidence"] = "high"
+        return mapped
+    info = resolve_from_info(name)
+    if info and info.get("website"):
+        info["confidence"] = "high"
+        return info
+    if icp_mod.available():
+        icp_hit = icp_mod.lookup(name)
+        if icp_hit and icp_hit.get("website"):
+            return {"name": name, "website": icp_hit["website"], "industry": None,
+                    "city": None, "nature": None, "career_url": None,
+                    "source": "icp", "confidence": "high"}
+    found = search_fallback(name, deadline)
+    website = found["website"]
+    if website:
+        meta = extract_meta(found["snippet"] or "", found["homepage"] or "")
+        career_url = probe_career_url(website, deadline)
+        # 映射（名录）命中但缺官网：行业/城市/性质/招聘站以映射为准，官网用搜索结果补。
+        # source 仍标 search：官网未经映射确认（可能命中子公司站点），前端保留「请核对」警示。
+        industry = found["industry"] or meta["industry"]
+        city, nature = meta["city"], meta["nature"]
+        if mapped:
+            industry = mapped.get("industry") or industry
+            city = mapped.get("city") or city
+            nature = mapped.get("nature") or nature
+            career_url = mapped.get("career_url") or career_url
+        return {"name": name, "website": website, "industry": industry,
+                "city": city, "nature": nature, "career_url": career_url,
+                "source": "search", "confidence": found["confidence"]}
+    if mapped:
+        # 名录命中但官网也没找到：返回名录元数据（行业/城市/性质/招聘站），官网留空待人工
+        return {"name": name, "website": None, "industry": mapped.get("industry"),
+                "city": mapped.get("city"), "nature": mapped.get("nature"),
+                "career_url": mapped.get("career_url"),
+                "source": "mapping", "confidence": "high"}
+    return {"name": name, "website": None, "industry": None, "city": None, "nature": None,
+            "career_url": None, "source": "failed", "confidence": None,
+            "error": "未找到可靠官网，请手动填写"}

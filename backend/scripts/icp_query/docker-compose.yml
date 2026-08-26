@@ -1,0 +1,13 @@
+# ICP 备案反查服务（HG-ha/ICP_Query）一键部署
+# 前置：本机安装 Docker Desktop（Windows/Mac）或 docker 引擎（Linux）
+# 用法：docker compose up -d ；验证：curl "http://127.0.0.1:16181/query/web?search=字节跳动"
+# 本工具后端对接：设置环境变量 ICP_API_URL=http://127.0.0.1:16181 后启动 backend（见 README.md）
+services:
+  icp-query:
+    image: yiminger/ymicp:latest
+    container_name: ymicp
+    restart: unless-stopped
+    ports:
+      - "16181:16181"
+    environment:
+      - TZ=Asia/Shanghai

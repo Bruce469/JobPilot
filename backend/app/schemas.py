@@ -115,6 +115,8 @@ class CompanyIn(BaseModel):
     name: str
     website: str
     industry: Optional[str] = None
+    city: Optional[str] = None
+    nature: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -123,6 +125,8 @@ class CompanyUpdate(BaseModel):
     website: Optional[str] = None
     career_url: Optional[str] = None
     industry: Optional[str] = None
+    city: Optional[str] = None
+    nature: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -150,6 +154,8 @@ class BackupCompanyItem(BaseModel):
     website: str
     career_url: Optional[str] = None
     industry: Optional[str] = None
+    city: Optional[str] = None
+    nature: Optional[str] = None
     probe_status: Optional[str] = None
     ats_type: Optional[str] = None
     notes: Optional[str] = None

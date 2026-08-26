@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { useCompaniesStore } from '@/stores/companies'
 import type { Company, CompanyResolveResult, FetchTaskResult, ProbeCandidate } from '@/types'
-import { INDUSTRIES, PROBE_STATUSES } from '@/utils/normalize'
+import { COMPANY_NATURES, INDUSTRIES, PROBE_STATUSES } from '@/utils/normalize'
 import { formatDateTime } from '@/utils/date'
 import ProbeResultPanel from '@/components/ProbeResultPanel.vue'
 import FetchPreviewModal from '@/components/FetchPreviewModal.vue'
@@ -61,10 +61,42 @@ function onBatchDone() {
   void load()
 }
 
+// ---------------- 筛选 ----------------
+interface CompanyFilterState {
+  keyword: string
+  city: string
+  industry: string | null
+  nature: string | null
+}
+
+const filters = reactive<CompanyFilterState>({ keyword: '', city: '', industry: null, nature: null })
+
+let debounceTimer: number | undefined
+
+function requestFetch() {
+  if (debounceTimer !== undefined) window.clearTimeout(debounceTimer)
+  debounceTimer = window.setTimeout(() => {
+    void load()
+  }, 250)
+}
+
+const filtersKey = computed(() => JSON.stringify(filters))
+watch(filtersKey, requestFetch)
+
+function clearFilters() {
+  Object.assign(filters, { keyword: '', city: '', industry: null, nature: null })
+  void load()
+}
+
 // ---------------- 列表加载 ----------------
 async function load() {
   try {
-    await companiesStore.fetchCompanies()
+    await companiesStore.fetchCompanies({
+      city: filters.city || null,
+      industry: filters.industry || null,
+      nature: filters.nature || null,
+      keyword: filters.keyword || null,
+    })
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '加载公司库失败')
   }
@@ -76,13 +108,23 @@ interface CompanyForm {
   name: string
   website: string
   industry: string | null
+  city: string
+  nature: string | null
   career_url: string
   notes: string
 }
 
 const formVisible = ref(false)
 const editingId = ref<string | null>(null)
-const form = reactive<CompanyForm>({ name: '', website: '', industry: null, career_url: '', notes: '' })
+const form = reactive<CompanyForm>({
+  name: '',
+  website: '',
+  industry: null,
+  city: '',
+  nature: null,
+  career_url: '',
+  notes: '',
+})
 
 // 名称自动补全
 const resolving = ref(false)
@@ -91,7 +133,7 @@ const resolveTipType = ref<'success' | 'warning' | 'info'>('info')
 
 function openCreate() {
   editingId.value = null
-  Object.assign(form, { name: '', website: '', industry: null, career_url: '', notes: '' })
+  Object.assign(form, { name: '', website: '', industry: null, city: '', nature: null, career_url: '', notes: '' })
   resolveTip.value = ''
   formVisible.value = true
 }
@@ -102,6 +144,8 @@ function openEdit(c: Company) {
     name: c.name,
     website: c.website,
     industry: c.industry,
+    city: c.city || '',
+    nature: c.nature,
     career_url: c.career_url || '',
     notes: c.notes || '',
   })
@@ -126,6 +170,8 @@ async function onAutoResolve() {
     }
     if (res.website) form.website = res.website
     if (res.industry) form.industry = res.industry
+    if (res.city) form.city = res.city
+    if (res.nature) form.nature = res.nature
     if (res.career_url) form.career_url = res.career_url
     if (res.source === 'search') {
       resolveTip.value = '结果来自网络搜索，请核对后再保存'
@@ -153,6 +199,8 @@ async function onFormSubmit() {
         name: form.name.trim(),
         website: form.website.trim(),
         industry: form.industry,
+        city: form.city.trim() || null,
+        nature: form.nature,
         career_url: form.career_url.trim() || null,
         notes: form.notes.trim() || null,
       })
@@ -162,6 +210,8 @@ async function onFormSubmit() {
         name: form.name.trim(),
         website: form.website.trim(),
         industry: form.industry,
+        city: form.city.trim() || null,
+        nature: form.nature,
         notes: form.notes.trim() || null,
       })
       ElMessage.success('公司已添加')
@@ -312,6 +362,20 @@ function probeStatusType(status: string | null): 'success' | 'info' | 'warning' 
       </div>
     </div>
 
+    <!-- 筛选栏 -->
+    <div class="filter-bar">
+      <el-input v-model="filters.keyword" placeholder="公司名关键词" clearable class="filter-item keyword" @keyup.enter="requestFetch" />
+      <el-input v-model="filters.city" placeholder="城市" clearable class="filter-item" @keyup.enter="requestFetch" />
+      <el-select v-model="filters.industry" placeholder="行业" clearable filterable allow-create default-first-option class="filter-item">
+        <el-option v-for="i in INDUSTRIES" :key="i" :label="i" :value="i" />
+      </el-select>
+      <el-select v-model="filters.nature" placeholder="公司性质" clearable filterable allow-create default-first-option class="filter-item">
+        <el-option v-for="n in COMPANY_NATURES" :key="n" :label="n" :value="n" />
+      </el-select>
+      <el-button @click="clearFilters">清除筛选</el-button>
+      <el-button :loading="loading" @click="load">搜索</el-button>
+    </div>
+
     <el-table v-loading="loading" :data="items" row-key="id" class="company-table" @selection-change="onSelectionChange">
       <el-table-column type="selection" width="44" />
       <el-table-column label="公司" min-width="160" show-overflow-tooltip>
@@ -319,9 +383,19 @@ function probeStatusType(status: string | null): 'success' | 'info' | 'warning' 
           <div class="company-name">{{ row.name }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="行业" width="90">
+      <el-table-column label="城市" width="100" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.city">{{ row.city }}</span><span v-else class="muted">—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="行业" width="90" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.industry">{{ row.industry }}</span><span v-else class="muted">—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="性质" width="80" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="row.nature">{{ row.nature }}</span><span v-else class="muted">—</span>
         </template>
       </el-table-column>
       <el-table-column label="官网" min-width="180" show-overflow-tooltip>
@@ -430,6 +504,14 @@ function probeStatusType(status: string | null): 'success' | 'info' | 'warning' 
             <el-option v-for="i in INDUSTRIES" :key="i" :label="i" :value="i" />
           </el-select>
         </el-form-item>
+        <el-form-item label="城市">
+          <el-input v-model="form.city" placeholder="可选，如：北京" clearable />
+        </el-form-item>
+        <el-form-item label="公司性质">
+          <el-select v-model="form.nature" placeholder="可选" clearable filterable allow-create default-first-option style="width: 100%">
+            <el-option v-for="n in COMPANY_NATURES" :key="n" :label="n" :value="n" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="招聘页链接">
           <el-input v-model="form.career_url" placeholder="可留空，自动补全或后续探测填写，如：https://jobs.bytedance.com/campus" />
         </el-form-item>
@@ -493,6 +575,19 @@ function probeStatusType(status: string | null): 'success' | 'info' | 'warning' 
   display: flex;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.filter-item {
+  width: 140px;
+}
+.filter-item.keyword {
+  width: 180px;
 }
 .company-table {
   flex: 1;

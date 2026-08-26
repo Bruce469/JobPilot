@@ -235,11 +235,12 @@ def _run_fetch(payload: dict, deadline: float) -> dict:
 def _run_resolve(payload: dict, deadline: float, task: dict) -> dict:
     """批量自动补全：逐公司 resolve，进度含「已补全 x/y」，结果含每公司数据。
 
-    补全结果自动写入缺失字段（仅填充 website/industry/career_url 为空的字段，
-    不覆盖已有值，防搜索误配覆盖手填数据）；信息已完整的公司跳过（source=skipped）；
-    单公司失败不阻塞其余。
+    补全结果自动写入缺失字段（仅填充 website/industry/career_url/city/nature 为空的字段，
+    不覆盖已有值，防搜索误配覆盖手填数据）；五项信息完整的公司跳过（source=skipped）；
+    非映射公司主体信息已完整、仅缺城市/性质时直接跳过（搜索兜底无法产出这两项，
+    避免无意义网络请求）；单公司失败不阻塞其余。
     """
-    from .resolve import resolve_company
+    from .resolve import resolve_company, resolve_from_info, resolve_from_mapping
 
     company_ids = payload.get("company_ids") or []
     total = len(company_ids)
@@ -250,28 +251,56 @@ def _run_resolve(payload: dict, deadline: float, task: dict) -> dict:
         company = dao.get_company(cid)
         if not company:
             results.append({"company_id": cid, "name": None, "website": None, "industry": None,
-                            "career_url": None, "source": "failed", "error": "公司不存在"})
+                            "city": None, "nature": None, "career_url": None,
+                            "source": "failed", "error": "公司不存在"})
             continue
-        if company.get("website") and company.get("industry") and company.get("career_url"):
+        if (company.get("website") and company.get("industry") and company.get("career_url")
+                and company.get("city") and company.get("nature")):
             skipped += 1
             results.append({"company_id": cid, "name": company["name"],
                             "website": company["website"], "industry": company["industry"],
+                            "city": company["city"], "nature": company["nature"],
                             "career_url": company["career_url"], "source": "skipped"})
             continue
-        try:
-            r = resolve_company(company["name"], _company_deadline(deadline))
-        except Exception as exc:  # 单公司失败不阻塞其余
-            logger.exception("单公司补全异常 cid=%s", cid)
-            r = {"name": company["name"], "website": None, "industry": None, "career_url": None,
-                 "source": "failed", "error": str(exc)}
+        r = resolve_from_mapping(company["name"])
+        if r is None:
+            r = resolve_from_info(company["name"])
+        if r is not None and r.get("website"):
+            pass  # 离线层完整命中（含官网），直接使用
+        else:
+            if r is None and company.get("website") and company.get("industry") and company.get("career_url"):
+                # 非映射/非 A股公司：仅缺城市/性质，搜索无法补全，直接跳过
+                skipped += 1
+                results.append({"company_id": cid, "name": company["name"],
+                                "website": company["website"], "industry": company["industry"],
+                                "city": company.get("city"), "nature": company.get("nature"),
+                                "career_url": company["career_url"], "source": "skipped"})
+                continue
+            # 未命中离线层 / 离线层命中但缺官网（如央企国企名录）：走完整 resolve（搜索补官网 + 合并名录元数据）
+            try:
+                r = resolve_company(company["name"], _company_deadline(deadline))
+            except Exception as exc:  # 单公司失败不阻塞其余
+                logger.exception("单公司补全异常 cid=%s", cid)
+                r = {"name": company["name"], "website": None, "industry": None,
+                     "city": None, "nature": None, "career_url": None,
+                     "source": "failed", "confidence": None, "error": str(exc)}
         if r.get("source") != "failed":
-            resolved += 1
             updates = {}
-            for field in ("website", "industry", "career_url"):
+            for field in ("website", "industry", "career_url", "city", "nature"):
                 if not company.get(field) and r.get(field):
                     updates[field] = r[field]
             if updates:
                 dao.update_company(cid, updates)
-        results.append({"company_id": cid, **r})
+                resolved += 1
+                results.append({"company_id": cid, **r})
+            elif r.get("source") in ("mapping", "info"):
+                # 离线层确定命中但已无新字段可写（如 A股公司仅缺招聘站/性质，离线层无法提供）→ 视为跳过
+                skipped += 1
+                results.append({"company_id": cid, **r, "source": "skipped"})
+            else:
+                resolved += 1
+                results.append({"company_id": cid, **r})
+        else:
+            results.append({"company_id": cid, **r})
     task["progress"] = f"已补全 {total}/{total}"
     return {"results": results, "resolved": resolved, "skipped": skipped, "total": total}

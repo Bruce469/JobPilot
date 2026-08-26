@@ -110,8 +110,15 @@ def delete_resume(resume_id: str, force: bool = False):
 
 # ---------------- 公司 companies ----------------
 @router.get("/companies")
-def list_companies():
-    return services.list_companies()
+def list_companies(
+    city: Optional[str] = None,
+    industry: Optional[str] = None,
+    nature: Optional[str] = None,
+    keyword: Optional[str] = None,
+):
+    return services.list_companies({
+        "city": city, "industry": industry, "nature": nature, "keyword": keyword,
+    })
 
 
 @router.post("/companies", status_code=201)

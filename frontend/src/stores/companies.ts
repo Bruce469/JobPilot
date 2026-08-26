@@ -16,6 +16,7 @@ import {
   updateCompany as apiUpdateCompany,
 } from '@/api/companies'
 import type { ImportCompaniesResult } from '@/api/companies'
+import type { CompanyFilters } from '@/api/companies'
 import { getTask } from '@/api/tasks'
 import { ApiError } from '@/api/http'
 import type { Company, CompanyPayload, CompanyResolveResult, TaskResult } from '@/types'
@@ -26,10 +27,10 @@ export const useCompaniesStore = defineStore('companies', () => {
   // 进行中的任务状态（companyId -> 任务类型/进度文本）
   const running = reactive<Record<string, { type: 'probe' | 'fetch'; jobId: string }>>({})
 
-  async function fetchCompanies() {
+  async function fetchCompanies(filters?: CompanyFilters) {
     loading.value = true
     try {
-      const data = await listCompanies()
+      const data = await listCompanies(filters)
       items.value = data.items
       return data
     } finally {

@@ -23,6 +23,11 @@ backend/market/logs/
 backend/backend.log
 *.log
 
+# 自动补全离线数据（脚本构建产物，不入库；运行 scripts/*.py 生成）
+backend/app/fetcher/company_info_data.json
+backend/scripts/company_db_progress.json
+backend/scripts/roster_raw.json
+
 # 环境与临时
 .env
 last_export.json

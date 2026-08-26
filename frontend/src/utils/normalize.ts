@@ -36,6 +36,8 @@ export const DEGREES = ['本科', '硕士', '博士']
 export const CHANNELS = ['官网', 'Boss直聘', '牛客', '内推', '邮箱', '其他']
 export const INDUSTRIES = ['互联网', '金融', '国企', '外企', '制造业', '其他']
 export const PROBE_STATUSES = ['未探测', '成功', '失败', '需人工']
+/** 公司性质（对应 companies.nature 字段，用于公司库筛选） */
+export const COMPANY_NATURES = ['国企', '央企', '私企', '外企', '合资', '事业单位', '其他']
 
 export interface StatusMeta {
   color: string

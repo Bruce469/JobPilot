@@ -30,7 +30,7 @@ const resolveResult = ref<{ ok: number; skipped: number; failed: CompanyResolveR
 const targetCompanies = computed(() =>
   isProbe.value
     ? props.companies.filter((c) => c.probe_status !== '成功')
-    : props.companies.filter((c) => !c.website || !c.industry || !c.career_url),
+    : props.companies.filter((c) => !c.website || !c.industry || !c.career_url || !c.city || !c.nature),
 )
 const skipCount = computed(() => props.companies.length - targetCompanies.value.length)
 const ids = computed(() => targetCompanies.value.map((c) => c.id))
@@ -129,7 +129,7 @@ function close() {
         将对选中的 <b>{{ companies.length }}</b> 家公司中未探测成功的 <b>{{ targetCompanies.length }}</b> 家逐家探测招聘入口：写入探测状态，缺失招聘页链接时自动填入探测到的最佳候选。预计每家企业约 10~60 秒，期间请勿关闭页面。
       </p>
       <p class="hint" v-else>
-        将自动补全选中的 <b>{{ companies.length }}</b> 家公司中信息缺失的 <b>{{ targetCompanies.length }}</b> 家（官网 / 行业 / 招聘页链接，仅填充缺失字段，不覆盖已有数据）。每家公司约需 5~30 秒，期间请勿关闭页面。
+        将自动补全选中的 <b>{{ companies.length }}</b> 家公司中信息缺失的 <b>{{ targetCompanies.length }}</b> 家（官网 / 行业 / 招聘页链接 / 城市 / 公司性质，仅填充缺失字段，不覆盖已有数据）。每家公司约需 5~30 秒，期间请勿关闭页面。
       </p>
       <p v-if="skipCount" class="skip-hint">
         {{ skipCount }} 家{{ isProbe ? '已探测成功' : '信息已完整' }}，自动跳过。
@@ -182,7 +182,7 @@ function close() {
           <span v-if="resolveResult.skipped" class="skip-count">跳过 {{ resolveResult.skipped }} 家</span>
           <span v-if="resolveResult.failed.length" class="fail-count">失败 {{ resolveResult.failed.length }} 家</span>
         </div>
-        <div v-if="resolveResult.ok" class="done-hint">已自动写入缺失字段（官网 / 行业 / 招聘页链接），未覆盖已有数据，可在列表中「编辑」修正。</div>
+        <div v-if="resolveResult.ok" class="done-hint">已自动写入缺失字段（官网 / 行业 / 招聘页链接 / 城市 / 公司性质），未覆盖已有数据，可在列表中「编辑」修正。</div>
         <div v-if="resolveResult.failed.length" class="fail-list">
           <div v-for="(d, i) in resolveResult.failed" :key="i" class="fail-item">
             <span class="fail-name">{{ d.name }}</span>
