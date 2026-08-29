@@ -29,8 +29,18 @@ export interface JobPayload {
   channel?: string | null
   job_url?: string | null
   source_job_id?: string | null
+  /**
+   * @deprecated 岗位表单已改用 applied_at；仅市场岗位导入（utils/market.ts buildMarketJobPayload）
+   * 仍写入该字段，后端继续接收/存储，故在此保留以保持市场导入行为不变。
+   */
   publish_date?: string | null
   deadline?: string | null
+  /** 投递时间（YYYY-MM-DD），表单新建默认今天；后端排序/统计基于该字段 */
+  applied_at?: string | null
+  /** 等待环节计划时间（PUT 时仅做格式校验，可传 null 清空） */
+  next_time?: string | null
+  /** 已拒绝时的环节标签（PUT 时仅做枚举校验，可传 null 清空） */
+  fail_stage?: string | null
   resume_id?: string | null
 }
 
@@ -92,10 +102,23 @@ export function batchDeleteJobs(ids: string[]): Promise<{ deleted: number }> {
   return http.post<{ deleted: number }>('/jobs/batch-delete', { ids }).then((r) => r.data)
 }
 
-export function changeJobStatus(id: string, status: string, note?: string, time?: string): Promise<StatusChangeResult> {
-  const body: Record<string, string> = { status }
+/**
+ * 状态流转。nextTime 仅对等待态生效、failStage 仅对已拒绝生效（其它目标后端自动置 null，不报错）；
+ * 空串/null 等同未设置（不随请求发送）。
+ */
+export function changeJobStatus(
+  id: string,
+  status: string,
+  note?: string,
+  time?: string,
+  nextTime?: string | null,
+  failStage?: string | null,
+): Promise<StatusChangeResult> {
+  const body: Record<string, string | null> = { status }
   if (note) body.note = note
   if (time) body.time = time
+  if (nextTime) body.next_time = nextTime
+  if (failStage) body.fail_stage = failStage
   return http.post<StatusChangeResult>(`/jobs/${id}/status`, body).then((r) => r.data)
 }
 

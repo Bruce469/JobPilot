@@ -63,6 +63,12 @@ def update_job(job_id: str, fields: dict) -> dict:
             data["resume_name"] = dao.get_resume(data["resume_id"])["name"]
         else:
             data["resume_name"] = None
+    # next_time/fail_stage 直接编辑（编辑的岗位可能正处等待态/已拒绝，只做格式与枚举校验，
+    # 不按状态强制清空；显式传 null 表示清空）
+    if data.get("next_time") is not None and not util.parse_dt(data.get("next_time")):
+        raise validation_error("next_time 格式非法")
+    if data.get("fail_stage") is not None and data["fail_stage"] not in dao.FAIL_STAGES:
+        raise validation_error("fail_stage 非法")
     # status/ended_at 不经此接口变更，走状态流转接口
     data.pop("status", None)
     data.pop("ended_at", None)
@@ -79,7 +85,30 @@ def batch_delete(ids: list) -> int:
     return dao.batch_delete(ids)
 
 
-def change_status(job_id: str, to_status: str, note=None, time=None) -> tuple[dict, dict | None]:
+def _resolve_next_time(to_status: str, next_time):
+    """流转目标为等待环节时校验并落计划时间；非等待环节一律清空（离开等待环节自动清理）。"""
+    if to_status not in dao.WAIT_STATUSES:
+        return None
+    if not next_time:  # 未传或空串视为不设置计划时间
+        return None
+    if not util.parse_dt(next_time):
+        raise validation_error("next_time 格式非法")
+    return next_time
+
+
+def _resolve_fail_stage(to_status: str, fail_stage):
+    """流转目标为「已拒绝」时校验并落被拒环节标签；非已拒绝一律清空（重新推进自动清标签）。"""
+    if to_status != "已拒绝":
+        return None
+    if not fail_stage:  # 未传或空串视为不设置被拒环节标签
+        return None
+    if fail_stage not in dao.FAIL_STAGES:
+        raise validation_error("fail_stage 非法")
+    return fail_stage
+
+
+def change_status(job_id: str, to_status: str, note=None, time=None,
+                  next_time=None, fail_stage=None) -> tuple[dict, dict | None]:
     job = dao.get_job(job_id)
     if not job:
         raise not_found("岗位", job_id)
@@ -89,7 +118,7 @@ def change_status(job_id: str, to_status: str, note=None, time=None) -> tuple[di
     if not util.parse_dt(event_time):
         raise validation_error("time 格式非法（应为 YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SS）")
     if job["status"] == to_status:
-        return job, None  # 同状态不产生事件
+        return job, None  # 同状态不产生事件（含 next_time/fail_stage 均不落库）
 
     updated_at = util.now_iso()
     applied_at = job.get("applied_at")
@@ -100,8 +129,16 @@ def change_status(job_id: str, to_status: str, note=None, time=None) -> tuple[di
         ended_at = util.date_of(event_time)  # 进终态记 ended_at
     elif ended_at:
         ended_at = None  # 从终态回退清 ended_at
+    # 流转辅助列：next_time/fail_stage 按状态规则解析；note 非空时刷新最近备注冗余列，为空保留原值
+    next_time = _resolve_next_time(to_status, next_time)
+    fail_stage = _resolve_fail_stage(to_status, fail_stage)
+    if note:
+        last_note, last_note_at = note, event_time
+    else:
+        last_note, last_note_at = job.get("last_note"), job.get("last_note_at")
     eid = dao.change_status_tx(job_id, to_status, job["status"], note, event_time,
-                               applied_at, ended_at, updated_at)
+                               applied_at, ended_at, updated_at,
+                               next_time, fail_stage, last_note, last_note_at)
     return dao.get_job(job_id), dao.get_event(eid)
 
 
@@ -161,6 +198,9 @@ def import_jobs(company_id: str, items: list[dict]) -> dict:
 
 
 # ---------------- 简历 resumes ----------------
+MAX_RESUME_PDF_SIZE = 10 * 1024 * 1024  # 上传 PDF 上限 10MB
+
+
 def get_resume(resume_id: str) -> dict:
     resume = dao.get_resume(resume_id)
     if not resume:
@@ -177,6 +217,53 @@ def create_resume(data: dict) -> dict:
     return dao.create_resume(data)
 
 
+def create_resume_with_pdf(filename: str, content: bytes) -> dict:
+    """上传简历源 PDF：校验扩展名 / %PDF- 魔数 / 大小（≤10MB），写盘并建简历记录。
+
+    简历名取文件名去扩展名、去空白并截断到 100 字符，为空用「未命名简历」；
+    basic 用前端 onCreate 的默认结构（空字段）；磁盘文件保存为 {resume_id}.pdf，
+    pdf_file 列只存文件名（不存全路径）。写盘失败会删除刚建的简历记录后原样抛异常。
+    """
+    name = str(filename or "").strip()
+    if not name.lower().endswith(".pdf"):
+        raise validation_error("仅支持 PDF 文件（文件名需以 .pdf 结尾）")
+    if not content[:5] == b"%PDF-":
+        raise validation_error("文件内容不是有效 PDF（缺少 %PDF- 魔数）")
+    if len(content) > MAX_RESUME_PDF_SIZE:
+        raise validation_error("PDF 文件大小不能超过 10MB")
+
+    resume_name = "".join(name[:-4].split())[:100]  # 去扩展名、去空白、截断 100
+    if not resume_name:
+        resume_name = "未命名简历"
+    basic = {"name": resume_name, "phone": "", "email": "",
+             "target_position": "", "city": ""}
+    resume = dao.create_resume({
+        "name": resume_name, "basic": basic,
+        "education": [], "experience": [], "projects": [], "skills": [],
+        "summary": None,
+    })
+    pdf_name = f"{resume['id']}.pdf"
+    try:
+        config.RESUME_FILES_DIR.mkdir(parents=True, exist_ok=True)
+        (config.RESUME_FILES_DIR / pdf_name).write_bytes(content)
+    except Exception:
+        dao.delete_resume(resume["id"])  # 写盘失败清理记录，避免脏数据
+        raise
+    return dao.update_resume(resume["id"], {"pdf_file": pdf_name})
+
+
+def get_resume_pdf_path(resume_id: str) -> Path:
+    """返回简历源 PDF 的磁盘路径；无附件或文件缺失抛 404。"""
+    resume = dao.get_resume(resume_id)
+    if not resume:
+        raise not_found("简历", resume_id)
+    pdf_file = resume.get("pdf_file")
+    path = (config.RESUME_FILES_DIR / pdf_file) if pdf_file else None
+    if not path or not path.is_file():
+        raise APIError(404, "NOT_FOUND", "该简历没有源 PDF 文件", {"id": resume_id})
+    return path
+
+
 def update_resume(resume_id: str, fields: dict) -> dict:
     if not dao.get_resume(resume_id):
         raise not_found("简历", resume_id)
@@ -184,8 +271,12 @@ def update_resume(resume_id: str, fields: dict) -> dict:
 
 
 def delete_resume(resume_id: str, force: bool):
-    """被岗位引用时先返回引用数（供前端二次确认）；force=true 才真正删除并置空引用。"""
-    if not dao.get_resume(resume_id):
+    """被岗位引用时先返回引用数（供前端二次确认）；force=true 才真正删除并置空引用。
+
+    删除记录后 best-effort 清理磁盘上的源 PDF 文件（失败仅跳过，不阻塞删除）。
+    """
+    resume = dao.get_resume(resume_id)
+    if not resume:
         raise not_found("简历", resume_id)
     refs = dao.count_by_resume(resume_id)
     if refs > 0 and not force:
@@ -193,6 +284,12 @@ def delete_resume(resume_id: str, force: bool):
     if refs > 0:
         dao.clear_resume_refs(resume_id)
     dao.delete_resume(resume_id)
+    pdf_file = resume.get("pdf_file")
+    if pdf_file:
+        try:
+            (config.RESUME_FILES_DIR / pdf_file).unlink(missing_ok=True)
+        except OSError:
+            pass  # best-effort：清理失败不影响删除结果
     return None
 
 
@@ -376,6 +473,8 @@ def import_backup(payload: dict) -> dict:
     if not isinstance(sv, int) or sv <= 0 or sv > cur:
         raise import_error(f"备份 schema_version 非法或过高（当前支持 {cur}）", {"schema_version": sv})
     jobs, companies, resumes = payload.get("jobs") or [], payload.get("companies") or [], payload.get("resumes") or []
+    # 注意：简历的 pdf_file 列随备份导出/导入（仅文件名），源 PDF 文件本体不在 JSON 备份内，
+    # 导入后若本机缺该文件，前端需手动重新上传（get_resume_pdf_path 会按缺失返回 404）。
     # 预校验必填字段，非法则 422 且不改动现有数据
     for c in companies:
         if not (c.get("id") and c.get("name") and c.get("website")):
@@ -445,7 +544,7 @@ def import_backup(payload: dict) -> dict:
 def compute_stats() -> dict:
     jobs = dao.all_jobs()
     now = datetime.now()
-    active_set = {"已投递", "简历筛选", "笔试", "一面", "二面", "三面/HR面"}
+    active_set = {"已投递", "笔试", "一面", "二面", "三面/HR面"}
 
     total_applied = sum(1 for j in jobs if j["status"] != "待投递")
     active = sum(1 for j in jobs if j["status"] in active_set)
@@ -466,7 +565,7 @@ def compute_stats() -> dict:
     counts: dict[str, int] = {}
     for j in jobs:
         counts[j["status"]] = counts.get(j["status"], 0) + 1
-    funnel_order = ["已投递", "简历筛选", "笔试", "一面", "二面", "三面/HR面", "已Offer", "已拒绝", "已放弃"]
+    funnel_order = ["已投递", "笔试", "一面", "二面", "三面/HR面", "已Offer", "已拒绝", "已放弃"]
     funnel = [{"status": s, "count": counts[s]} for s in funnel_order if counts.get(s)]
 
     channel: dict[str, int] = {}

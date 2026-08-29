@@ -26,6 +26,14 @@ export interface Job {
   deadline: string | null
   applied_at: string | null
   status: string
+  /** 等待环节计划时间（YYYY-MM-DDTHH:mm 或日期）；非等待状态恒为 null */
+  next_time: string | null
+  /** 已拒绝时的环节标签（FAIL_STAGES 之一）；非已拒绝恒为 null */
+  fail_stage: string | null
+  /** 最近一次流转备注；当次流转未写备注时为 null */
+  last_note: string | null
+  /** last_note 对应的流转事件时间 */
+  last_note_at: string | null
   ended_at: string | null
   resume_id: string | null
   resume_name: string | null
@@ -90,6 +98,8 @@ export interface Resume {
   projects: ProjectItem[]
   skills: string[]
   summary: string | null
+  /** 源 PDF 文件名（上传 PDF 简历后存在；无附件或已删除为 null） */
+  pdf_file?: string | null
   created_at: string
   updated_at: string
 }

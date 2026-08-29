@@ -20,6 +20,7 @@ class JobCreate(BaseModel):
     source_job_id: Optional[str] = None
     publish_date: Optional[str] = None
     deadline: Optional[str] = None
+    applied_at: Optional[str] = None
     resume_id: Optional[str] = None
     notes: Optional[list] = None
 
@@ -37,6 +38,9 @@ class JobUpdate(BaseModel):
     source_job_id: Optional[str] = None
     publish_date: Optional[str] = None
     deadline: Optional[str] = None
+    applied_at: Optional[str] = None
+    next_time: Optional[str] = None
+    fail_stage: Optional[str] = None
     resume_id: Optional[str] = None
     notes: Optional[list] = None
 
@@ -45,6 +49,8 @@ class JobStatusIn(BaseModel):
     status: str
     note: Optional[str] = None
     time: Optional[str] = None  # 可选，默认服务端当前时间
+    next_time: Optional[str] = None  # 等待环节计划时间（仅等待态生效，离开自动清空）
+    fail_stage: Optional[str] = None  # 被拒环节标签（仅已拒绝生效，重新推进自动清空）
 
 
 class BatchDelete(BaseModel):
@@ -173,6 +179,7 @@ class BackupResumeItem(BaseModel):
     projects: Optional[list] = None
     skills: Optional[list] = None
     summary: Optional[str] = None
+    pdf_file: Optional[str] = None  # 源 PDF 文件名（本体不在 JSON 备份内）
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -194,6 +201,10 @@ class BackupJobItem(BaseModel):
     applied_at: Optional[str] = None
     status: Optional[str] = None
     ended_at: Optional[str] = None
+    next_time: Optional[str] = None
+    fail_stage: Optional[str] = None
+    last_note: Optional[str] = None
+    last_note_at: Optional[str] = None
     resume_id: Optional[str] = None
     resume_name: Optional[str] = None
     notes: Optional[list] = None

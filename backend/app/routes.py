@@ -1,7 +1,8 @@
 """API 路由层（架构 4.2 端点清单，前缀 /api）。"""
 from typing import Optional
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, File, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 
 from . import config, db, schemas, services
 from .errors import APIError
@@ -75,7 +76,8 @@ def delete_job(job_id: str):
 
 @router.post("/jobs/{job_id}/status")
 def change_status(job_id: str, body: schemas.JobStatusIn):
-    job, event = services.change_status(job_id, body.status, body.note, body.time)
+    job, event = services.change_status(job_id, body.status, body.note, body.time,
+                                        body.next_time, body.fail_stage)
     return {"job": job, "event": event}
 
 
@@ -90,9 +92,32 @@ def create_resume(body: schemas.ResumeIn):
     return services.create_resume(body.model_dump())
 
 
+@router.post("/resumes/upload-pdf", status_code=201)
+async def upload_resume_pdf(file: UploadFile = File(...)):
+    """上传简历源 PDF（multipart 字段名 file），返回带 pdf_file 的简历对象。
+
+    先按服务层上限截读，避免超大文件整体占内存；大小/类型校验在服务层统一处理。
+    """
+    max_size = services.MAX_RESUME_PDF_SIZE
+    content = await file.read(max_size + 1)  # 只多读 1 字节即可判定超限
+    return services.create_resume_with_pdf(file.filename or "", content)
+
+
 @router.get("/resumes/{resume_id}")
 def get_resume(resume_id: str):
     return services.get_resume(resume_id)
+
+
+@router.get("/resumes/{resume_id}/pdf")
+def get_resume_pdf(resume_id: str):
+    """在线预览简历源 PDF（inline，ASCII 文件名回退避免中文头报错）。"""
+    path = services.get_resume_pdf_path(resume_id)
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=f"{resume_id}.pdf",  # 下载名用 id 而非原始中文名，规避 Content-Disposition 编码问题
+        content_disposition_type="inline",
+    )
 
 
 @router.put("/resumes/{resume_id}")

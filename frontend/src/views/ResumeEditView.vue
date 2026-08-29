@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getResume, updateResume } from '@/api/resumes'
+import PdfViewerDialog from '@/components/PdfViewerDialog.vue'
 import type { EducationItem, ExperienceItem, ProjectItem, Resume, ResumePayload } from '@/types'
 
 const route = useRoute()
@@ -35,10 +36,14 @@ const form = reactive<EditableResume>({
 
 const loading = ref(true)
 const saving = ref(false)
+/** 源 PDF 文件名（getResume 返回的 pdf_file），仅在有附件时显示「查看源PDF」入口 */
+const sourcePdfFile = ref<string | null>(null)
+const pdfVisible = ref(false)
 
 onMounted(async () => {
   try {
     const r: Resume = await getResume(resumeId)
+    sourcePdfFile.value = r.pdf_file ?? null
     form.name = r.name
     form.basic = { ...emptyBasic(), ...(r.basic || {}) }
     form.education = (r.education || []).map((x) => ({ ...x }))
@@ -127,6 +132,7 @@ async function onSaveAndPreview() {
     <div class="edit-header">
       <el-button @click="router.push('/resumes')">返回</el-button>
       <div class="header-right">
+        <el-button v-if="sourcePdfFile" @click="pdfVisible = true">查看源PDF</el-button>
         <el-button :loading="saving" @click="onSave">保存</el-button>
         <el-button type="primary" :loading="saving" @click="onSaveAndPreview">保存并预览</el-button>
       </div>
@@ -292,6 +298,9 @@ async function onSaveAndPreview() {
       <template #header>自我评价</template>
       <el-input v-model="form.summary" type="textarea" :rows="4" placeholder="一段话介绍自己（可选）" />
     </el-card>
+
+    <!-- 源 PDF 在线预览 -->
+    <PdfViewerDialog v-model="pdfVisible" :resume-id="resumeId" title="源 PDF 预览" />
   </div>
 </template>
 

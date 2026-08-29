@@ -77,9 +77,12 @@ export const useJobsStore = defineStore('jobs', () => {
     return res
   }
 
-  /** 状态流转（拖拽与按钮共用）。成功后用返回的 job 就地更新、事件追加到缓存。 */
-  async function changeStatus(id: string, status: string, note?: string, time?: string) {
-    const res = await changeJobStatus(id, status, note, time)
+  /**
+   * 状态流转（拖拽与按钮共用）。成功后用返回的 job 就地更新、事件追加到缓存。
+   * nextTime/failStage 透传给后端（仅对应目标状态生效，见 changeJobStatus）。
+   */
+  async function changeStatus(id: string, status: string, note?: string, time?: string, nextTime?: string | null, failStage?: string | null) {
+    const res = await changeJobStatus(id, status, note, time, nextTime, failStage)
     if (res.job) replaceJob(res.job)
     if (res.event) {
       eventsByJob[id] = [...(eventsByJob[id] ?? []), res.event]

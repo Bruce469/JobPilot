@@ -136,13 +136,17 @@
 | applied_at | TEXT | NULL | 实际投递时间 YYYY-MM-DD（转「已投递」时写入） |
 | status | TEXT | NOT NULL DEFAULT '待投递' | 状态全集见 4.1 |
 | ended_at | TEXT | NULL | 终态日期（进终态写，回退清） |
+| next_time | TEXT | NULL | 等待环节（笔试/一面/二面/三面/HR面）计划时间 YYYY-MM-DD 或 YYYY-MM-DDTHH:MM，离开等待环节自动清空 |
+| fail_stage | TEXT | NULL | 被拒环节标签（简历挂/笔试挂/一面挂/二面挂/三面挂/HR挂/其他），重新推进自动清空 |
+| last_note | TEXT | NULL | 最近一次流转备注冗余列（列表直显用） |
+| last_note_at | TEXT | NULL | 最近一次流转备注时间（= 该次流转 event_time） |
 | resume_id | TEXT | NULL, 外键 resumes(id) ON DELETE SET NULL | 所投简历 |
 | resume_name | TEXT | NULL | 简历名快照（绑定时刻冻结） |
 | notes | TEXT | NULL | JSON 数组 `[{time, content}]`（M1 定结构，M2 出界面） |
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
 
-状态全集常量：`待投递 / 已投递 / 简历筛选 / 笔试 / 一面 / 二面 / 三面/HR面 / 已Offer / 已拒绝 / 已放弃`；终态 = `{已Offer, 已拒绝, 已放弃}`。
+状态全集常量（迁移 006 起「简历筛选」合并进「已投递」，共 9 个）：`待投递 / 已投递 / 笔试 / 一面 / 二面 / 三面/HR面 / 已Offer / 已拒绝 / 已放弃`；终态 = `{已Offer, 已拒绝, 已放弃}`；等待环节 = `{笔试, 一面, 二面, 三面/HR面}`（next_time 仅这些状态有意义）。
 
 #### job_events（时间线，独立表）
 

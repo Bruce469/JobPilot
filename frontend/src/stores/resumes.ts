@@ -41,7 +41,8 @@ export const useResumesStore = defineStore('resumes', () => {
   /** 返回 undefined 表示已删除；返回 {referenced_by} 表示被引用需要二次确认 */
   async function deleteResume(id: string, force = false): Promise<DeleteResumeResult | undefined> {
     const result = await apiDeleteResume(id, force)
-    if (result === undefined || result.deleted) {
+    // axios 对 204 空响应返回 '' 或 undefined（视版本而定），统一用 falsy 判断
+    if (!result || result.deleted) {
       items.value = items.value.filter((x) => x.id !== id)
       return undefined
     }

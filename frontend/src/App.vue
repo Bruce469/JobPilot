@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { DataAnalysis, Files, Odometer, TrendCharts } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
+import StatusFlowDialog from '@/components/StatusFlowDialog.vue'
 
 const appStore = useAppStore()
 const route = useRoute()
@@ -110,6 +111,9 @@ function retryBoot() {
         <router-view v-else />
       </el-main>
     </el-container>
+
+    <!-- 全局状态流转弹窗（备注 / 安排时间 / 未通过环节） -->
+    <StatusFlowDialog />
   </el-container>
 </template>
 

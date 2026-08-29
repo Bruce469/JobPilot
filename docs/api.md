@@ -1,7 +1,8 @@
 # 秋招投递助手 API 契约（M1）
 
-版本：v1.1（对应架构文档 v1.0 / PRD v0.6）
+版本：v1.2（对应架构文档 v1.0 / PRD v0.6）
 > v1.1 修订（PRD v0.6 §4.12）：新增公司批量导入、按公司名自动补全（映射表 + 搜索兜底）三个端点及 resolve 异步任务。
+> v1.2 修订（岗位状态体系重规划）：「简历筛选」合并进「已投递」；jobs 新增 `next_time`/`fail_stage`/`last_note`/`last_note_at`；流转接口与编辑接口支持 `next_time`/`fail_stage`。
 Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF-8）。
 
 ## 通用约定
@@ -53,14 +54,14 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 响应 `{items, total}`，item 不含 events。
 
 ### POST /api/jobs
-请求体（仅 `company` 必填）：`company, company_id, position, job_type, degree, city, industry, channel, job_url, source_job_id, publish_date, deadline, resume_id`。
-响应 201 + 完整 job（status 默认 `待投递`，含 created_at/updated_at）。
+请求体（仅 `company` 必填）：`company, company_id, position, job_type, degree, city, industry, channel, job_url, source_job_id, publish_date, deadline, applied_at, resume_id`。
+响应 201 + 完整 job（status 默认 `待投递`，含 created_at/updated_at）。`applied_at` 为新建时设置的投递日期（`YYYY-MM-DD`，可选；进入「已投递」状态时不覆盖已设值）。
 
 ### GET /api/jobs/{id}
 详情：job 对象 + `events` 数组（时间线，按 time 升序）。
 
 ### PUT /api/jobs/{id}
-部分更新，仅更新传入字段并刷新 `updated_at`；`status`/`ended_at` 不经此接口（走流转接口）。返回完整 job。
+部分更新，仅更新传入字段并刷新 `updated_at`；`status`/`ended_at` 不经此接口（走流转接口）。可传 `applied_at`（`YYYY-MM-DD`，可选；不传时保持原值，传 `null` 清空）。可传 `next_time`（等待环节计划时间，`YYYY-MM-DD` 或 `YYYY-MM-DDTHH:MM`，格式非法 400；传 `null` 清空）与 `fail_stage`（被拒环节标签，值域 简历挂/笔试挂/一面挂/二面挂/三面挂/HR挂/其他，非法 400；传 `null` 清空）——编辑不按状态强制清空（岗位可能正处等待态/已拒绝）。返回完整 job。
 
 ### DELETE /api/jobs/{id}
 硬删除（级联删 job_events），响应 204。
@@ -69,9 +70,14 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 请求体 `{ "ids": ["..."] }`，响应 `{ "deleted": n }`。
 
 ### POST /api/jobs/{id}/status
-请求体：`{ "status": "笔试", "note": "...", "time": "2026-08-24T10:00:00" }`（time 可选，默认服务端当前时间）。
+状态全集（9 个，v1.2 起「简历筛选」已合并进「已投递」）：`待投递 / 已投递 / 笔试 / 一面 / 二面 / 三面/HR面 / 已Offer / 已拒绝 / 已放弃`（历史 job_events 中的「简历筛选」事件保留）。
+请求体：`{ "status": "笔试", "note": "...", "time": "2026-08-24T10:00:00", "next_time": "2026-08-30T09:00", "fail_stage": "笔试挂" }`（time 可选，默认服务端当前时间；next_time/fail_stage 可选）。
 响应 200：`{ "job": {...}, "event": {...} }`。
 业务规则：同状态流转 `event` 为 null 且不写事件；进终态写 `ended_at`，回退清 `ended_at`；进入「已投递」记 `applied_at`（不覆盖已有值）；非法状态 400。
+流转辅助列规则：
+- `next_time`：仅目标为等待环节（笔试/一面/二面/三面/HR面）时允许非空，格式非法 400；目标非等待环节一律置 `null`（离开等待环节自动清空），不报错。
+- `fail_stage`：仅目标为「已拒绝」时允许非空，值域 简历挂/笔试挂/一面挂/二面挂/三面挂/HR挂/其他，非法 400；目标非「已拒绝」一律置 `null`（重新推进自动清标签），不报错。
+- `note` 非空时同步刷新冗余列 `last_note`/`last_note_at`（=event_time）；为空时保留原 `last_note`/`last_note_at` 不动。
 
 ### POST /api/jobs/import
 抓取/批量导入岗位（去重）。请求体：
@@ -95,12 +101,22 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 请求体：`name`（必填）、`basic`（必填：name/phone/email/target_position/city）、`education`、`experience`、`projects`、`skills`、`summary`。
 响应 201 + resume。
 
+### POST /api/resumes/upload-pdf
+上传简历源 PDF（multipart，字段名 `file`），自动创建简历并返回 201 + resume（含 `pdf_file` 文件名）。
+- 校验：文件名须以 `.pdf` 结尾、内容前 5 字节为 `%PDF-` 魔数、大小 ≤ 10MB，任一不满足返回 400 `VALIDATION_ERROR`。
+- 简历名取文件名去扩展名、去空白、截断 100 字符，为空用「未命名简历」；`basic` 为默认空结构。
+- 附件落盘到 `{DATA_DIR}/resume_files/{resume_id}.pdf`，`pdf_file` 字段只存文件名。
+
+### GET /api/resumes/{id}/pdf
+在线预览源 PDF（`Content-Disposition: inline`，`media-type: application/pdf`，下载名为 `{id}.pdf` 的 ASCII 回退）。
+简历不存在 / 无附件 / 磁盘文件缺失均返回 404 `NOT_FOUND`（无附件与文件缺失 message 为「该简历没有源 PDF 文件」）。
+
 ### GET /api/resumes/{id} / PUT /api/resumes/{id}
 详情 / 部分更新（刷新 updated_at）。
 
 ### DELETE /api/resumes/{id}
 若被岗位引用且未 `?force=true`：返回 `{ "referenced_by": n, "deleted": false }` 供二次确认；
-`?force=true` 后删除并将引用岗位的 resume_id/resume_name 置空，响应 204。
+`?force=true` 后删除并将引用岗位的 resume_id/resume_name 置空，响应 204；删除后 best-effort 清理磁盘上的源 PDF 文件。
 
 ---
 
@@ -200,7 +216,7 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 
 ### GET /api/backup/export
 全量备份：`{ "schema_version": 1, "exported_at": "...", "jobs": [...], "companies": [...], "resumes": [...] }`。
-导出后记录上次导出时间（供启动备份提醒）。
+导出后记录上次导出时间（供启动备份提醒）。resumes 条目含 `pdf_file`（仅文件名；源 PDF 文件本体不在 JSON 备份内，导入后本机缺文件时需手动重新上传）。jobs 条目含完整字段，含 `next_time`/`fail_stage`/`last_note`/`last_note_at`（导入旧备份无这些字段时自然为 null）。
 
 ### POST /api/backup/import
 请求体：`{ "schema_version": 1, "mode": "merge|overwrite", "jobs": [...], "companies": [...], "resumes": [...] }`。
@@ -227,7 +243,7 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 ```
 
 - total_applied = 已投递及之后状态（不含「待投递」）
-- active = 已投递 ~ 三面/HR面（非终态）
+- active = 已投递 ~ 三面/HR面（非终态；「简历筛选」已合并进「已投递」，v1.2 起不再单列）
 - offered = 已Offer；rejected = 已拒绝 + 已放弃
 - pending_followup = 进行中且距上次流转 >3 天
 - funnel 从「已投递」起、不含「待投递」；weekly_trend 近 4 周按 applied_at（周一为周起点）

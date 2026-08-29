@@ -109,8 +109,8 @@ async function onDragEnd(evt: DragEndPayload) {
   }
 }
 
-async function onStatusChange(payload: { id: string; status: string }) {
-  const ok = await flowStatus(payload.id, payload.status)
+async function onStatusChange(payload: { id: string; status: string; fromStatus: string }) {
+  const ok = await flowStatus(payload.id, payload.status, payload.fromStatus)
   if (ok) {
     await jobsStore.loadEvents([payload.id])
   }

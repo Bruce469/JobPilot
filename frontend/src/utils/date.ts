@@ -8,6 +8,11 @@ export function toISODate(d: Date): string {
 }
 
 export function todayStr(): string {
+  return todayISO()
+}
+
+/** 本地时区今天的日期串（YYYY-MM-DD），供表单默认值使用 */
+export function todayISO(): string {
   return toISODate(new Date())
 }
 

@@ -6,14 +6,19 @@ from contextlib import closing
 from . import util
 from .db import get_conn
 
-# 状态全集与终态（架构 4.1 / PRD 4.2）
-STATUS_ALL = ["待投递", "已投递", "简历筛选", "笔试", "一面", "二面", "三面/HR面", "已Offer", "已拒绝", "已放弃"]
+# 状态全集与终态（架构 4.1 / PRD 4.2；「简历筛选」已合并进「已投递」，见迁移 006）
+STATUS_ALL = ["待投递", "已投递", "笔试", "一面", "二面", "三面/HR面", "已Offer", "已拒绝", "已放弃"]
 TERMINAL = {"已Offer", "已拒绝", "已放弃"}
+# 等待环节：next_time 计划时间仅在这些状态下有意义，离开即自动清空
+WAIT_STATUSES = {"笔试", "一面", "二面", "三面/HR面"}
+# 被拒环节标签：仅「已拒绝」状态下有意义，重新推进即自动清空
+FAIL_STAGES = ["简历挂", "笔试挂", "一面挂", "二面挂", "三面挂", "HR挂", "其他"]
 
 JOB_COLS = (
     "id", "company", "company_id", "position", "job_type", "degree", "city", "industry",
     "channel", "job_url", "source_job_id", "publish_date", "deadline", "applied_at",
-    "status", "ended_at", "resume_id", "resume_name", "notes", "created_at", "updated_at",
+    "status", "ended_at", "next_time", "fail_stage", "last_note", "last_note_at",
+    "resume_id", "resume_name", "notes", "created_at", "updated_at",
 )
 COMPANY_COLS = (
     "id", "name", "website", "career_url", "industry", "city", "nature",
@@ -22,7 +27,7 @@ COMPANY_COLS = (
 )
 RESUME_COLS = (
     "id", "name", "basic", "education", "experience", "projects", "skills",
-    "summary", "created_at", "updated_at",
+    "summary", "pdf_file", "created_at", "updated_at",
 )
 SORT_WHITELIST = {"updated_at", "created_at", "deadline", "applied_at", "company", "status", "position"}
 
@@ -111,6 +116,8 @@ def create_job(data: dict) -> dict:
         "source_job_id": data.get("source_job_id"), "publish_date": data.get("publish_date"),
         "deadline": data.get("deadline"), "applied_at": data.get("applied_at"),
         "status": data.get("status") or "待投递", "ended_at": data.get("ended_at"),
+        "next_time": data.get("next_time"), "fail_stage": data.get("fail_stage"),
+        "last_note": data.get("last_note"), "last_note_at": data.get("last_note_at"),
         "resume_id": data.get("resume_id"), "resume_name": data.get("resume_name"),
         "notes": _dump(data.get("notes") or []),
         "created_at": data.get("created_at") or now, "updated_at": data.get("updated_at") or now,
@@ -157,14 +164,17 @@ def batch_delete(ids: list) -> int:
 
 
 def change_status_tx(jid: str, to_status: str, from_status: str, note, event_time: str,
-                     applied_at, ended_at, updated_at: str) -> str:
-    """事务内更新 job + 写一条状态流转事件，返回事件 id。"""
+                     applied_at, ended_at, updated_at: str,
+                     next_time=None, fail_stage=None, last_note=None, last_note_at=None) -> str:
+    """事务内更新 job（含流转辅助列）+ 写一条状态流转事件，返回事件 id。"""
     eid = util.new_id()
     with closing(get_conn()) as conn:
         with conn:
             conn.execute(
-                "UPDATE jobs SET status=?, applied_at=?, ended_at=?, updated_at=? WHERE id=?",
-                (to_status, applied_at, ended_at, updated_at, jid),
+                "UPDATE jobs SET status=?, applied_at=?, ended_at=?, updated_at=?,"
+                " next_time=?, fail_stage=?, last_note=?, last_note_at=? WHERE id=?",
+                (to_status, applied_at, ended_at, updated_at,
+                 next_time, fail_stage, last_note, last_note_at, jid),
             )
             conn.execute(
                 "INSERT INTO job_events (id, job_id, time, type, from_status, to_status, note, created_at)"
@@ -349,6 +359,7 @@ def create_resume(data: dict) -> dict:
         "projects": _dump(data.get("projects") or []),
         "skills": _dump(data.get("skills") or []),
         "summary": data.get("summary"),
+        "pdf_file": data.get("pdf_file"),
         "created_at": data.get("created_at") or now,
         "updated_at": data.get("updated_at") or now,
     }

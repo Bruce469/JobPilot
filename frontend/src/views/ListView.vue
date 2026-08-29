@@ -8,7 +8,7 @@ import { useResumesStore } from '@/stores/resumes'
 import { useStatusFlow } from '@/composables/useStatusFlow'
 import type { JobFilters } from '@/api/jobs'
 import type { Job, JobEvent } from '@/types'
-import { CHANNELS, INDUSTRIES, SORT_FIELDS, STATUS_ALL, overdueEventOf } from '@/utils/normalize'
+import { CHANNELS, INDUSTRIES, INTERVIEW_STATUSES, SORT_FIELDS, STATUS_ALL, arrangeOverdueOf, overdueEventOf } from '@/utils/normalize'
 import { deadlineLabel, formatDate, formatDateTime } from '@/utils/date'
 import StatusBadge from '@/components/StatusBadge.vue'
 import JobFormModal from '@/components/JobFormModal.vue'
@@ -123,7 +123,7 @@ function onSortChange({ prop, order }: { prop: string | null; order: string | nu
 // ---------------- 行内状态流转 ----------------
 async function onRowStatusChange(row: Job, status: string) {
   if (status === row.status) return
-  const ok = await flowStatus(row.id, status)
+  const ok = await flowStatus(row.id, status, row.status)
   if (ok) {
     await jobsStore.loadEvents([row.id])
   }
@@ -142,6 +142,52 @@ const overdueByJob = computed<Record<string, JobEvent>>(() => {
 function overdueTip(job: Job): string {
   const ev = overdueByJob.value[job.id]
   return ev ? `「${ev.to_status}」事件时间 ${formatDateTime(ev.time)} 已过，状态未推进，请跟进` : ''
+}
+
+// ---------------- 状态列 meta 区（安排时间 / 未通过环节 / 最近备注） ----------------
+interface StatusMetaOf {
+  lineA: string
+  lineAOverdue: boolean
+  lineATip: string
+  lineAIsTag: boolean
+  fallbackOverdue: boolean
+  selectTip: string
+}
+
+function statusMetaOf(job: Job): StatusMetaOf {
+  const empty: StatusMetaOf = {
+    lineA: '',
+    lineAOverdue: false,
+    lineATip: '',
+    lineAIsTag: false,
+    fallbackOverdue: false,
+    selectTip: '',
+  }
+  // 等待态：优先展示 next_time 安排时间；无 next_time 时回退事件过期提醒（下拉红框）
+  if (INTERVIEW_STATUSES.has(job.status)) {
+    const arrange = arrangeOverdueOf(job)
+    if (arrange) {
+      return {
+        lineA: arrange.text,
+        lineAOverdue: arrange.overdue,
+        lineATip: arrange.overdue ? '安排时间已过，状态未推进，请跟进' : '',
+        lineAIsTag: false,
+        fallbackOverdue: false,
+        selectTip: '',
+      }
+    }
+    const tip = overdueTip(job)
+    return { ...empty, fallbackOverdue: !!tip, selectTip: tip }
+  }
+  // 已拒绝：展示未通过环节标签
+  if (job.status === '已拒绝' && job.fail_stage) {
+    return { ...empty, lineA: job.fail_stage, lineAIsTag: true }
+  }
+  return empty
+}
+
+function lastNoteTip(job: Job): string {
+  return job.last_note_at ? `${job.last_note}（${formatDateTime(job.last_note_at)}）` : job.last_note || ''
 }
 
 // ---------------- 删除 / 批量删除 ----------------
@@ -278,29 +324,42 @@ function deadlineCell(job: Job) {
           <span v-else class="muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="132">
+      <el-table-column label="状态" width="185">
         <template #default="{ row }">
-          <el-tooltip v-if="overdueTip(row as Job)" :content="overdueTip(row as Job)" placement="top">
-            <div class="status-cell overdue-mark">
+          <div class="status-cell" :class="{ 'overdue-mark': statusMetaOf(row as Job).fallbackOverdue }">
+            <el-tooltip v-if="statusMetaOf(row as Job).selectTip" :content="statusMetaOf(row as Job).selectTip" placement="top">
               <el-select
                 :model-value="row.status"
                 size="small"
-                style="width: 108px"
+                style="width: 132px"
                 @change="(val: string) => onRowStatusChange(row as Job, val)"
               >
                 <el-option v-for="s in STATUS_ALL" :key="s" :label="s" :value="s" />
               </el-select>
-            </div>
-          </el-tooltip>
-          <div v-else class="status-cell">
+            </el-tooltip>
             <el-select
+              v-else
               :model-value="row.status"
               size="small"
-              style="width: 108px"
+              style="width: 132px"
               @change="(val: string) => onRowStatusChange(row as Job, val)"
             >
               <el-option v-for="s in STATUS_ALL" :key="s" :label="s" :value="s" />
             </el-select>
+
+            <div v-if="statusMetaOf(row as Job).lineA" class="status-meta-line" :class="{ 'meta-overdue': statusMetaOf(row as Job).lineAOverdue }">
+              <el-tag v-if="statusMetaOf(row as Job).lineAIsTag" size="small" type="danger" effect="plain">{{ statusMetaOf(row as Job).lineA }}</el-tag>
+              <el-tooltip v-else-if="statusMetaOf(row as Job).lineATip" :content="statusMetaOf(row as Job).lineATip" placement="top">
+                <span class="meta-nowrap">{{ statusMetaOf(row as Job).lineA }}</span>
+              </el-tooltip>
+              <span v-else class="meta-nowrap">{{ statusMetaOf(row as Job).lineA }}</span>
+            </div>
+
+            <div v-if="row.last_note" class="status-meta-line note-line">
+              <el-tooltip :content="lastNoteTip(row as Job)" placement="top">
+                <span class="meta-nowrap">{{ row.last_note }}</span>
+              </el-tooltip>
+            </div>
           </div>
         </template>
       </el-table-column>
@@ -448,7 +507,9 @@ function deadlineCell(job: Job) {
 }
 .status-cell {
   display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 .overdue-mark {
   border-radius: 4px;
@@ -456,6 +517,26 @@ function deadlineCell(job: Job) {
 .overdue-mark :deep(.el-select) {
   box-shadow: 0 0 0 2px #fca5a5;
   border-radius: 4px;
+}
+.status-meta-line {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 16px;
+  max-width: 148px;
+}
+.status-meta-line.meta-overdue {
+  color: #dc2626;
+}
+.status-meta-line.note-line {
+  color: #6b7280;
+}
+.meta-nowrap {
+  display: inline-block;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 .table-empty {
   padding: 24px 0;

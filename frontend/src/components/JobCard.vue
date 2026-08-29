@@ -1,20 +1,35 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Job } from '@/types'
-import { STATUS_ALL } from '@/utils/normalize'
-import { deadlineLabel } from '@/utils/date'
+import { STATUS_ALL, arrangeOverdueOf } from '@/utils/normalize'
+import { deadlineLabel, formatDateTime } from '@/utils/date'
 import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{ job: Job }>()
 
 const emit = defineEmits<{
-  (e: 'status-change', payload: { id: string; status: string }): void
+  (e: 'status-change', payload: { id: string; status: string; fromStatus: string }): void
   (e: 'detail', job: Job): void
   (e: 'edit', job: Job): void
   (e: 'delete', job: Job): void
 }>()
 
 const deadline = computed(() => deadlineLabel(props.job.deadline))
+
+// 等待环节安排时间（笔试/面试前缀语义 + 过期标红）
+const arrange = computed(() => arrangeOverdueOf(props.job))
+const arrangeText = computed(() => {
+  if (!arrange.value) return ''
+  const prefix = props.job.status === '笔试' ? '笔试' : '面试'
+  return `${prefix}：${arrange.value.text}`
+})
+const arrangeOverdue = computed(() => arrange.value?.overdue ?? false)
+
+// 最近一次流转备注（title 兜底展示完整内容）
+const noteTitle = computed(() => {
+  if (!props.job.last_note) return ''
+  return props.job.last_note_at ? `${props.job.last_note}（${formatDateTime(props.job.last_note_at)}）` : props.job.last_note
+})
 
 function onCommand(cmd: string) {
   if (cmd === 'detail') emit('detail', props.job)
@@ -39,20 +54,25 @@ function onCommand(cmd: string) {
       <span v-if="job.resume_name" class="meta-item resume">{{ job.resume_name }}</span>
     </div>
     <div class="job-card-actions" @click.stop>
-      <el-dropdown trigger="click" @command="(cmd: string) => emit('status-change', { id: job.id, status: cmd })">
-        <button class="card-btn status-btn" title="点击流转状态" @mousedown.stop>
-          <StatusBadge :status="job.status" size="small" />
-        </button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item v-for="s in STATUS_ALL" :key="s" :command="s">
-              <span class="status-option" :class="{ 'is-current': s === job.status }">
-                {{ s }}<span v-if="s === job.status" class="current-mark">当前</span>
-              </span>
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <div class="card-status-group">
+        <el-dropdown trigger="click" @command="(cmd: string) => emit('status-change', { id: job.id, status: cmd, fromStatus: job.status })">
+          <button class="card-btn status-btn" title="点击流转状态" @mousedown.stop>
+            <StatusBadge :status="job.status" size="small" />
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="s in STATUS_ALL" :key="s" :command="s">
+                <span class="status-option" :class="{ 'is-current': s === job.status }">
+                  {{ s }}<span v-if="s === job.status" class="current-mark">当前</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-tag v-if="job.status === '已拒绝' && job.fail_stage" size="small" type="danger" effect="plain">
+          {{ job.fail_stage }}
+        </el-tag>
+      </div>
 
       <el-dropdown trigger="click" @command="onCommand">
         <button class="card-btn more-btn" title="更多操作" @mousedown.stop>更多</button>
@@ -65,6 +85,11 @@ function onCommand(cmd: string) {
         </template>
       </el-dropdown>
     </div>
+
+    <div v-if="arrangeText" class="job-card-arrange" :class="{ 'is-overdue': arrangeOverdue }">
+      {{ arrangeText }}
+    </div>
+    <div v-if="job.last_note" class="job-card-note" :title="noteTitle">{{ job.last_note }}</div>
   </div>
 </template>
 
@@ -154,6 +179,35 @@ function onCommand(cmd: string) {
   justify-content: space-between;
   align-items: center;
   margin-top: 8px;
+}
+.card-status-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.job-card-arrange {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #2563eb;
+  background: #eef4ff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 18px;
+}
+.job-card-arrange.is-overdue {
+  color: #b91c1c;
+  background: #feecec;
+}
+.job-card-note {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .card-btn {
   border: none;

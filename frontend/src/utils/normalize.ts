@@ -1,11 +1,10 @@
 // 状态常量与展示元数据（对应 backend/app/dao.py STATUS_ALL / TERMINAL）
 import type { Job, JobEvent } from '@/types'
-import { parseDateTime } from './date'
+import { formatDateTime, parseDateTime } from './date'
 
 export const STATUS_ALL = [
   '待投递',
   '已投递',
-  '简历筛选',
   '笔试',
   '一面',
   '二面',
@@ -17,7 +16,7 @@ export const STATUS_ALL = [
 
 export type JobStatus = (typeof STATUS_ALL)[number]
 
-export const ACTIVE_STATUSES: readonly string[] = STATUS_ALL.slice(0, 7)
+export const ACTIVE_STATUSES: readonly string[] = STATUS_ALL.slice(0, 6)
 export const TERMINAL_STATUSES: readonly string[] = ['已Offer', '已拒绝', '已放弃']
 
 /** 面试/笔试类状态：用于过期事件提醒 */
@@ -48,7 +47,6 @@ export interface StatusMeta {
 export const STATUS_META: Record<string, StatusMeta> = {
   待投递: { color: '#3a6ea5', bg: '#eaf1fa', border: '#c9dcf2' },
   已投递: { color: '#1d5bd7', bg: '#e8f0ff', border: '#c0d6fb' },
-  简历筛选: { color: '#0e8a7d', bg: '#e2f5f2', border: '#b5e5de' },
   笔试: { color: '#d97706', bg: '#fdf1dc', border: '#f5dcae' },
   一面: { color: '#7c3aed', bg: '#f1eafd', border: '#d8c8f8' },
   二面: { color: '#7c3aed', bg: '#f1eafd', border: '#d8c8f8' },
@@ -77,6 +75,33 @@ export function overdueEventOf(job: Pick<Job, 'status'>, events: JobEvent[]): Jo
     }
   }
   return null
+}
+
+/** 已拒绝时的环节标签全集（对应后端 FAIL_STAGES） */
+export const FAIL_STAGES = ['简历挂', '笔试挂', '一面挂', '二面挂', '三面挂', 'HR挂', '其他'] as const
+
+/** 由流转前状态推导「未通过环节」默认值：待投递/已投递→简历挂，笔试→笔试挂，一面→一面挂，二面→二面挂，三面/HR面→HR挂，其它→其他 */
+export function defaultFailStage(fromStatus: string): string {
+  if (fromStatus === '笔试') return '笔试挂'
+  if (fromStatus === '一面') return '一面挂'
+  if (fromStatus === '二面') return '二面挂'
+  if (fromStatus === '三面/HR面') return 'HR挂'
+  if (fromStatus === '待投递' || fromStatus === '已投递') return '简历挂'
+  return '其他'
+}
+
+/**
+ * 等待环节（笔试/面试类状态）的安排时间展示：仅等待态且 next_time 存在时返回
+ * `{ text: 'MM-DD HH:mm', overdue }`，无 next_time 返回 null（调用方回退 overdueEventOf）。
+ */
+export function arrangeOverdueOf(
+  job: Pick<Job, 'status' | 'next_time'>,
+): { text: string; overdue: boolean } | null {
+  if (!INTERVIEW_STATUSES.has(job.status)) return null
+  if (!job.next_time) return null
+  const d = parseDateTime(job.next_time)
+  if (!d) return null
+  return { text: formatDateTime(job.next_time).slice(5), overdue: d.getTime() < Date.now() }
 }
 
 /** 列表/看板排序白名单（与后端 SORT_WHITELIST 一致） */

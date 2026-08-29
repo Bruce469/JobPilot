@@ -7,6 +7,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 
 DATA_DIR = Path(os.environ.get("APP_DATA_DIR", BASE_DIR / "data"))
 DB_PATH = Path(os.environ.get("APP_DB_PATH", DATA_DIR / "app.db"))
+# 简历源 PDF 附件目录（跟随 APP_DATA_DIR 覆盖，文件名 {resume_id}.pdf）
+RESUME_FILES_DIR = DATA_DIR / "resume_files"
 
 HOST = os.environ.get("APP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("APP_PORT", "8000"))

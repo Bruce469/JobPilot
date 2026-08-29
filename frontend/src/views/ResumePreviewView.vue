@@ -32,7 +32,10 @@ function onPrint() {
 <template>
   <div v-loading="loading" class="preview-page">
     <div class="preview-toolbar no-print">
-      <el-button @click="router.push(`/resumes/${resumeId}`)">返回编辑</el-button>
+      <div class="toolbar-left">
+        <el-button @click="router.push('/resumes')">返回</el-button>
+        <el-button @click="router.push(`/resumes/${resumeId}`)">返回编辑</el-button>
+      </div>
       <div class="toolbar-right">
         <el-button type="primary" @click="onPrint">打印 / 导出 PDF</el-button>
       </div>
@@ -52,6 +55,10 @@ function onPrint() {
   display: flex;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+.toolbar-left {
+  display: flex;
+  gap: 8px;
 }
 .print-area {
   background: #e5e7eb;

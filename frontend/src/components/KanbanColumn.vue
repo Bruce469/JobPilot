@@ -17,7 +17,7 @@ const props = defineProps<{ status: string; jobs: Job[] }>()
 
 const emit = defineEmits<{
   (e: 'end', evt: DragEndPayload): void
-  (e: 'status-change', payload: { id: string; status: string }): void
+  (e: 'status-change', payload: { id: string; status: string; fromStatus: string }): void
   (e: 'detail', job: Job): void
   (e: 'edit', job: Job): void
   (e: 'delete', job: Job): void

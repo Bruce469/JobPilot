@@ -3,7 +3,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import type { Company, Job, Resume } from '@/types'
 import type { JobPayload } from '@/api/jobs'
-import { CHANNELS, DEGREES, INDUSTRIES, JOB_TYPES } from '@/utils/normalize'
+import { CHANNELS, DEGREES, FAIL_STAGES, INDUSTRIES, INTERVIEW_STATUSES, JOB_TYPES } from '@/utils/normalize'
+import { todayISO } from '@/utils/date'
 import { predictSalary } from '@/api/market'
 import { ApiError } from '@/api/http'
 import { buildPredictRequest } from '@/utils/market'
@@ -31,9 +32,12 @@ interface FormModel {
   industry: string | null
   channel: string | null
   job_url: string
-  publish_date: string | null
+  applied_at: string
   deadline: string | null
   resume_id: string | null
+  // 编辑态按当前状态显示：等待环节可改安排时间，已拒绝可改未通过环节
+  next_time: string | null
+  fail_stage: string | null
 }
 
 function emptyForm(): FormModel {
@@ -47,9 +51,11 @@ function emptyForm(): FormModel {
     industry: null,
     channel: null,
     job_url: '',
-    publish_date: null,
+    applied_at: todayISO(),
     deadline: null,
     resume_id: null,
+    next_time: null,
+    fail_stage: null,
   }
 }
 
@@ -96,9 +102,12 @@ function fromJob(job: Job): FormModel {
     industry: job.industry || null,
     channel: job.channel || null,
     job_url: job.job_url || '',
-    publish_date: job.publish_date || null,
+    // 编辑时回显已有投递时间；没有则留空（提交时为空串 → null，即清空）
+    applied_at: job.applied_at ? job.applied_at.slice(0, 10) : '',
     deadline: job.deadline || null,
     resume_id: job.resume_id || null,
+    next_time: job.next_time || null,
+    fail_stage: job.fail_stage || null,
   }
 }
 
@@ -167,9 +176,12 @@ async function onSubmit() {
       industry: form.industry,
       channel: form.channel,
       job_url: form.job_url.trim() || null,
-      publish_date: form.publish_date || null,
+      applied_at: form.applied_at || null,
       deadline: form.deadline || null,
       resume_id: form.resume_id || null,
+      // 仅编辑态对应状态有意义；其它状态后端本就为 null，传 null 无副作用
+      next_time: form.next_time || null,
+      fail_stage: form.fail_stage || null,
     }
     emit('submit', payload)
   } finally {
@@ -283,14 +295,37 @@ async function onSubmit() {
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="发布日期">
+          <el-form-item label="投递时间">
             <el-date-picker
-              v-model="form.publish_date"
+              v-model="form.applied_at"
               type="date"
               value-format="YYYY-MM-DD"
-              placeholder="职位发布日期"
+              placeholder="默认为今天"
               style="width: 100%"
             />
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <!-- 编辑态专属：按当前状态补充安排时间 / 未通过环节（流转弹窗之外的修改入口） -->
+      <el-row v-if="job" :gutter="12">
+        <el-col v-if="job.status && INTERVIEW_STATUSES.has(job.status)" :span="12">
+          <el-form-item label="安排时间">
+            <el-date-picker
+              v-model="form.next_time"
+              type="datetime"
+              value-format="YYYY-MM-DDTHH:mm"
+              format="YYYY-MM-DD HH:mm"
+              placeholder="笔试/面试时间，可清空"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col v-if="job.status === '已拒绝'" :span="12">
+          <el-form-item label="未通过环节">
+            <el-select v-model="form.fail_stage" placeholder="选择挂在哪个环节" clearable style="width: 100%">
+              <el-option v-for="s in FAIL_STAGES" :key="s" :label="s" :value="s" />
+            </el-select>
           </el-form-item>
         </el-col>
       </el-row>

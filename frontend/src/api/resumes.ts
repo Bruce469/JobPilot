@@ -18,6 +18,21 @@ export function updateResume(id: string, payload: Partial<ResumePayload>): Promi
   return http.put<Resume>(`/resumes/${id}`, payload).then((r) => r.data)
 }
 
+/**
+ * 上传 PDF 生成结构化简历（multipart 字段 file，仅 .pdf / ≤10MB，否则 400）。
+ * 成功后返回完整 Resume（含 pdf_file）；FormData 交给 axios 自动设置 multipart 边界，勿手动覆盖 Content-Type。
+ */
+export function uploadResumePdf(file: File): Promise<Resume> {
+  const form = new FormData()
+  form.append('file', file)
+  return http.post<Resume>('/resumes/upload-pdf', form).then((r) => r.data)
+}
+
+/** 下载简历源 PDF 字节流（鉴权依赖 X-Auth-Token 请求头，axios 实例自动注入） */
+export function getResumePdfBlob(id: string): Promise<Blob> {
+  return http.get<Blob>(`/resumes/${id}/pdf`, { responseType: 'blob' }).then((r) => r.data)
+}
+
 export interface DeleteResumeResult {
   referenced_by: number
   deleted: boolean

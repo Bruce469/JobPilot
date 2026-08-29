@@ -8,6 +8,7 @@ uvicorn>=0.30.0
 pydantic>=2.7.0
 httpx>=0.27.0
 beautifulsoup4>=4.12.0
+python-multipart>=0.0.9   # multipart 表单解析（简历 PDF 上传 POST /api/resumes/upload-pdf）
 
 # ---- market 模块基础依赖（与 pandas/numpy 解耦，仅 SQLAlchemy 等）----
 sqlalchemy>=2.0.30        # 兼容 2.0.x（本机 2.0.52）

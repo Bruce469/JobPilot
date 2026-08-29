@@ -10,6 +10,7 @@ import {
   isToday,
   isWithinDays,
   parseDate,
+  todayISO,
   toISODate,
 } from '../date'
 
@@ -96,6 +97,13 @@ describe('deadlineLabel', () => {
   })
   it('无截止返回空', () => {
     expect(deadlineLabel(null)).toEqual({ text: '', kind: '' })
+  })
+})
+
+describe('todayISO', () => {
+  it('返回本地时区今天的日期串 YYYY-MM-DD（与 toISODate(new Date()) 一致）', () => {
+    expect(todayISO()).toBe(toISODate(new Date()))
+    expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })
 
