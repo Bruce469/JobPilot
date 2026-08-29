@@ -10,7 +10,7 @@
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)
 ![XGBoost R²](https://img.shields.io/badge/薪资模型%20R%C2%B2-0.5144-success)
 ![数据](https://img.shields.io/badge/市场数据-10%2C114%20条-blue)
-![测试](https://img.shields.io/badge/自动化测试-249%20passed-brightgreen)
+![测试](https://img.shields.io/badge/自动化测试-281%20passed-brightgreen)
 
 ---
 
@@ -41,9 +41,9 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 
 | 模块 | 能力 |
 |---|---|
-| **岗位看板** | 10 状态流转看板（待投递 → 已投递 → 简历筛选 → 笔试 → 一面/二面/三面·HR面 → 已Offer/已拒绝/已放弃），跨列拖拽流转；每次流转自动写入时间线事件；终态默认收起 |
-| **岗位列表** | 关键词搜索 + 状态/城市/行业/渠道多条件组合筛选、列排序、批量删除、行内流转；笔试/面试时间过期标红提醒；「今日/本周安排」「即将截止 ≤3 天」聚合 |
-| **简历管理** | 多份简历 CRUD（结构化区块：基本信息/教育/实习/项目/技能/自我评价）；A4 版式渲染 + `window.print()` 打印/另存 PDF；岗位绑定简历版本（名称快照冻结）；删除被引用简历有引用计数保护 |
+| **岗位看板** | 9 状态流转看板（待投递 → 已投递 → 笔试 → 一面/二面/三面·HR面 → 已Offer/已拒绝/已放弃），跨列拖拽流转；每次流转自动写入时间线事件；终态默认收起。卡片直显安排时间 / 未通过环节标签 / 最近备注 |
+| **岗位列表** | 关键词搜索 + 状态/城市/行业/渠道多条件组合筛选、列排序、批量删除、行内流转。流转弹窗按目标状态动态出现字段：等待环节（笔试/一面/二面/三面·HR面）可填**安排时间**（列表直显、过期标红、编辑弹窗可改期）、流转「已拒绝」可选**未通过环节标签**（简历挂/笔试挂/一面挂/二面挂/三面挂/HR挂/其他，按来源状态智能预填）；流转备注直显在状态格；投递时间新建默认当天、编辑回显原值；「今日/本周安排」「即将截止 ≤3 天」聚合 |
+| **简历管理** | 多份简历 CRUD（结构化区块：基本信息/教育/实习/项目/技能/自我评价）；**支持上传已有 PDF 简历**（≤10MB，列表/编辑页在线预览，对照源 PDF 补录结构化内容）；A4 版式渲染 + `window.print()` 打印/另存 PDF；岗位绑定简历版本（名称快照冻结）；删除被引用简历有引用计数保护 |
 | **公司库** | txt 批量导入；输入公司名自动补全官网/招聘页/行业（四级数据流水线，见[难点 6](#难点-6公司名--官网自动补全的低误配率四级数据流水线)）；官网招聘页自动探测 + 一键抓取岗位并去重导入 |
 | **统计** | 总投递/进行中/已Offer/已拒绝/待跟进卡片 + 漏斗图/渠道分布/近 4 周趋势（指标口径定义于 PRD） |
 | **备份** | JSON 全量导出导入（merge 以本机为准 / overwrite 二次确认全替），schema_version 校验防版本错乱；距上次备份 >7 天启动提醒 |
@@ -210,7 +210,7 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 **问题**：投递助手（原生 sqlite3 + 自建 DAO）与 JobPulse（SQLAlchemy + MySQL/SQLite 双驱动）技术形态完全不同，要合并成一个用户只有一个数据库文件的应用，还不能破坏彼此的数据与安全模型。
 
 **解决**：
-- 收敛为**编号 SQL 迁移 + schema_migrations 表**的单一演进体系（001 建投递域四表、002 追加市场域两表、003/004 迭代增强），禁止修改已发布脚本；备份 JSON 带 `schema_version`，导入时高版本拒绝、低版本兼容；
+- 收敛为**编号 SQL 迁移 + schema_migrations 表**的单一演进体系（001 建投递域四表、002 追加市场域两表、003~006 迭代增强），禁止修改已发布脚本；备份 JSON 带 `schema_version`，导入时高版本拒绝、低版本兼容；
 - market 以普通 `APIRouter` 挂载进宿主应用，鉴权完全复用宿主中间件（并专门验证 `/api/market/*` 在无 token 时确实被 401 覆盖），同时删除 B 原 CORS 配置与独立 API 入口；
 - 协同点走显式契约：市场岗位导入经过字段映射 + 查重 + 空值拦截三层转换，保证「脏的市场数据」永不污染「干净的投递库」。
 - 合并后做了全量回归（见成果），而非假设"挂上去就能跑"。
@@ -220,6 +220,28 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 **问题**：后台抓取线程与请求线程会同时读写同一个文件库，埋着锁冲突和数据损坏风险。
 
 **解决**：`PRAGMA journal_mode=WAL`（读写互不阻塞）+ `foreign_keys=ON` + `busy_timeout=5000`；DAO 层提供连接工厂、每操作短连接（`with closing(conn)`），线程间绝不共享连接；时间线事件拆独立表（而非 JSON 列）换取索引检索能力（ADR-2）。此外全库备份以 JSON 导出为主 WAL 为辅，启动 >7 天未备份主动提醒。
+
+### 难点 11：简历源 PDF 在线预览——iframe 带不了鉴权头
+
+**问题**：全站 API 靠 `X-Auth-Token` 自定义头鉴权，但 `<iframe src>` 发起的请求带不了自定义头——直接把 PDF 端点塞进 iframe 必然 401。放宽中间件允许 `?token=` 查询参数又等于在 URL/日志/历史记录里泄漏凭证，否决。
+
+**解决**：预览走「带鉴权的数据通道」而非「带鉴权的资源地址」——用 axios（拦截器自动注入 token）以 `responseType: 'blob'` 拉取 PDF 字节流，`URL.createObjectURL` 生成带随机指纹的 blob URL 喂给 iframe，关闭时 `revokeObjectURL` 释放；组件对「拉取期间用户已关闭」做了竞态防护。鉴权模型零放宽，浏览器原生 PDF 查看器的缩放/翻页/另存全部白嫖。上传侧同理收紧：仅收 `.pdf` 扩展名 + `%PDF-` 魔数 + 10MB 封顶（后端按 `MAX+1` 读入防超大文件整体进内存），附件按简历 ID 落盘、随简历删除事务外 best-effort 清理。
+
+### 难点 12：「删除后列表不刷新」的幽灵 bug——axios 对 204 返回的是空串
+
+**问题**：删除简历后必须手动刷新列表，行才消失。接口返回 204、store 也写了 `items = items.filter(...)`，逻辑看起来无懈可击。
+
+**解决**：根因是一行类型宽度不一致的判断——store 声明 `deleteResume(): Promise<DeleteResumeResult | undefined>`，判定写的是 `result === undefined || result.deleted`；而 axios 对 204 空响应实际返回的是**空字符串 `''`**（不是 `undefined`），于是既不满足「未删除」分支也不满足「已删除」分支，行永远留在列表里。修复为 `!result || result.deleted` 同时兼容两种空值形态，并在浏览器里端到端复验了删除与强制删除两条路径。教训：**对「空」的判断要按运行时真实形态写，而不是按 TS 类型标注写**。
+
+### 难点 13：状态体系重整——改语义不改历史，字段生命周期随状态自动管理
+
+**问题**：随着使用浮现三类真实痛点：「已投递」与「简历筛选」语义重复；等待笔试/面试时时间只能记在备注里但列表看不见；被拒后想标「挂在哪一轮」只能靠翻时间线。直接改状态枚举牵一发动全身——存量数据、历史事件、看板列、漏斗统计、前后端五处枚举都要一致。
+
+**解决**：把「重整」拆成三条正交规则，全部收敛在后端流转事务一处：
+1. **改当前、不改历史**：迁移 006 只 `UPDATE jobs` 归并存量状态；`job_events` 里的「→ 简历筛选」原样保留（历史事实），看板「今日安排」等事件回放自然兼容；
+2. **字段生命周期绑定状态机**：`next_time`（安排时间）仅等待环节可写、离开即清空；`fail_stage`（未通过环节）仅「已拒绝」可写、推进即清空——清空规则在 `change_status` 一处强制，前端不存在「忘记清」的可能；流转写库与事件插入在同一事务（`change_status_tx`）；
+3. **读写分离的可见性**：最近备注做成 `last_note` 冗余列（事务内随流转同写），列表/看板零额外查询直显；历史时间线仍走事件表，各取所短。
+前端流转入口收敛为按目标状态动态出字段的单一弹窗组件（等待态出「安排时间」、拒绝态出「未通过环节」且按来源状态智能预填），列表/看板/拖拽三种入口共用同一套规则。
 
 ---
 
@@ -238,6 +260,20 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 | 前端生产构建 | 成功 |
 
 真实服务集成冒烟：A 域 13 项（创建→查→流转→删全闭环）、市场域 6 项、安全 5 项（401/403）、迁移 5 项、协同点 2 项全部通过。两轮上线前评审（功能 + 安全）发现的缺陷（updated_at 不刷新、市场列表口径不一致、独立 API 入口绕过安全中间件等）均已修复并复测，过程完整记录在 `docs/test-report.md`、`docs/merge-test-report.md`、`docs/security-review.md`——包括每个缺陷的根因分析与回归方式。
+
+### 迭代回归（简历 PDF 附件 + 状态体系重规划，2026-08 末）
+
+| 套件 | 结果 |
+|---|---|
+| 投递域 pytest | **130 passed**（新增 29：PDF 附件 11、applied_at 3、状态重规划 18，含迁移升级专用验证） |
+| 市场域 pytest（联网用例默认跳过） | **125 passed** |
+| 全量合计 | **281 passed / 0 failed** |
+| 前端类型检查 vue-tsc | 零错误 |
+| 前端 Vitest | **63 passed**（新增安排时间/未通过环节工具函数与状态全集用例） |
+| 前端生产构建 | 成功 |
+| 浏览器端到端 | 上传→预览→删除清理、流转→安排时间→过期标红、拒绝→标签、备注直显、改期，逐项人工验证通过 |
+
+迁移 006 对存量数据做了升级前后的专用验证：独立临时库先建到 005 版本、注入旧状态数据，再 `db.migrate()` 升级，断言状态归并与新列就位。
 
 ### 数据与模型成果
 
@@ -306,8 +342,10 @@ ICP_API_URL=http://127.0.0.1:16181 python run.py  # 启用 ICP 备案反查补�
 | GET/POST | `/api/jobs` | 岗位列表（多维筛选/排序）/ 创建 |
 | GET/PUT/DELETE | `/api/jobs/{id}` | 详情（含时间线）/ 更新 / 删除 |
 | POST | `/api/jobs/batch-delete` · `/api/jobs/import` | 批量删除 / 抓取结果去重导入 |
-| POST | `/api/jobs/{id}/status` | 状态流转（事务写 job_events，终态管理 ended_at） |
+| POST | `/api/jobs/{id}/status` | 状态流转（事务写 job_events + next_time/fail_stage/last_note 状态机规则，终态管理 ended_at） |
 | GET/POST | `/api/resumes` 及 `/api/resumes/{id}` | 简历 CRUD（删除引用保护 `referenced_by`） |
+| POST | `/api/resumes/upload-pdf` | 上传源 PDF 建简历（仅 .pdf + 魔数校验 + ≤10MB） |
+| GET | `/api/resumes/{id}/pdf` | 在线预览源 PDF（`Content-Disposition: inline`） |
 | GET/POST | `/api/companies` · `/api/companies/import` · `/api/companies/resolve` | 公司 CRUD / txt 批量导入 / 名称自动补全（四级流水线） |
 | POST | `/api/companies/{id}/probe` · `/fetch` | 异步探测招聘入口 / 抓取岗位 |
 | GET | `/api/tasks/{job_id}` | 异步任务轮询 |
@@ -344,11 +382,11 @@ backend/
 │   └── cli.py              # crawl/etl/analyze/nlp/model/viz/report 一键流水线
 ├── migrations/             # 编号 SQL 迁移（schema_migrations 表管理）
 ├── scripts/smoke.py        # 41 项冒烟断言
-└── tests/ tests_market/    # 61 + 125 项单测
+└── tests/ tests_market/    # 130 + 151 项单测（含 26 个默认跳过的联网用例）
 frontend/src/
 ├── views/                  # 看板/列表/公司库/简历×3/统计/设置 + 市场×3
-├── components/             # KanbanColumn/JobCard/TimelinePanel/ResumeRenderer(A4)/...
-├── stores/ api/ types/ utils/ composables/
+├── components/             # KanbanColumn/JobCard/TimelinePanel/ResumeRenderer(A4)/PdfViewerDialog/StatusFlowDialog/...
+├── stores/ api/ types/ utils/ composables/   # composables 含状态流转弹窗控制器（按目标状态动态字段）
 docs/
 ├── prd.md architecture.md api.md
 ├── review.md security-review.md test-report.md merge-test-report.md
@@ -383,11 +421,12 @@ npm run typecheck && npm test && npm run build      # 类型检查 / 单测 / �
 - [x] 市场情报全链路（采集→清洗→分析→NLP→建模→看板）+ 前后端分离版
 - [x] 双域合并单进程 + 协同能力（市场导入投递 / 薪资参考）
 - [x] 上线前功能/安全双评审及缺陷修复闭环
+- [x] 简历源 PDF 上传与在线预览；状态体系重规划（状态合并 / 安排时间 / 未通过环节标签 / 备注直显）
 
 **规划中**
 - [ ] 时间趋势图：快照表就绪，积累 ≥2 个采集批次后启用
 - [ ] 抓取适配扩展：北森 / Moka / 大易 ATS 适配器（注册表机制已预留扩展点）
-- [ ] 备注/面经界面与浏览器通知（数据结构已定）
+- [ ] 面经管理与浏览器通知（备注直显已落地，通知未做）
 - [ ] ECharts 按需分包（当前首包 ~1.1MB，本地应用可接受）
 - [ ] 部署服务器时的真实鉴权升级（架构已预留：鉴权集中于中间件一处）
 
