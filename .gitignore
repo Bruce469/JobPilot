@@ -33,3 +33,6 @@ backend/scripts/roster_raw.json
 last_export.json
 *.tmp
 .DS_Store
+
+# 简历源 PDF 附件（个人简历不入库）
+backend/data/resume_files/
