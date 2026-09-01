@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeTxtBuffer, parseTxtLines } from '../txt'
+import { decodeTxtBuffer, parseCompanyLines, parseTxtLines } from '../txt'
 
 describe('parseTxtLines（txt 按行解析）', () => {
   it('按行拆分、trim 首尾空格、忽略空行', () => {
@@ -22,6 +22,51 @@ describe('parseTxtLines（txt 按行解析）', () => {
   it('行内全角/半角空格保留（仅去首尾空白）', () => {
     expect(parseTxtLines('  字节跳动  ')).toEqual(['字节跳动'])
     expect(parseTxtLines('北 京 字节跳动')).toEqual(['北 京 字节跳动'])
+  })
+})
+
+describe('parseCompanyLines（txt 结构化公司信息解析）', () => {
+  it('按空格拆出名称/城市/行业/性质/官网五个字段', () => {
+    expect(parseCompanyLines('字节跳动 北京 互联网 民营企业 https://www.bytedance.com')).toEqual([
+      { name: '字节跳动', city: '北京', industry: '互联网', nature: '民营企业', website: 'https://www.bytedance.com' },
+    ])
+  })
+
+  it('兼容 \\r\\n 与 \\r 换行、忽略空行、按公司名去重', () => {
+    const text = '字节跳动 北京\r\n\r\n腾讯 深圳\r\n字节跳动 上海\n美团\t'
+    expect(parseCompanyLines(text)).toEqual([
+      { name: '字节跳动', city: '北京', industry: null, nature: null, website: null },
+      { name: '腾讯', city: '深圳', industry: null, nature: null, website: null },
+      { name: '美团', city: null, industry: null, nature: null, website: null },
+    ])
+  })
+
+  it('占位内容（官网未公开 / 无 / - / 未知等）置为空', () => {
+    expect(parseCompanyLines('某公司 北京 互联网 官网未公开 官网未公开')).toEqual([
+      { name: '某公司', city: '北京', industry: '互联网', nature: null, website: null },
+    ])
+    expect(parseCompanyLines('某公司 无 - / 未知')).toEqual([
+      { name: '某公司', city: null, industry: null, nature: null, website: null },
+    ])
+  })
+
+  it('仅公司名的旧格式文件兼容解析', () => {
+    expect(parseCompanyLines('字节跳动\n腾讯')).toEqual([
+      { name: '字节跳动', city: null, industry: null, nature: null, website: null },
+      { name: '腾讯', city: null, industry: null, nature: null, website: null },
+    ])
+  })
+
+  it('中间列缺失用占位词占位时不影响后续列位置', () => {
+    expect(parseCompanyLines('国家电网 北京 - 国企 https://www.sgcc.com.cn')).toEqual([
+      { name: '国家电网', city: '北京', industry: null, nature: '国企', website: 'https://www.sgcc.com.cn' },
+    ])
+  })
+
+  it('空文本 / 全占位行返回空数组', () => {
+    expect(parseCompanyLines('')).toEqual([])
+    expect(parseCompanyLines('  \n\r\n')).toEqual([])
+    expect(parseCompanyLines('无\n-')).toEqual([])
   })
 })
 

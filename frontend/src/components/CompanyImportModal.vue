@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useCompaniesStore } from '@/stores/companies'
-import type { CompanyImportSyncResult, CompanyResolveResult } from '@/types'
-import { decodeTxtBuffer, parseTxtLines } from '@/utils/txt'
+import type { CompanyImportRow, CompanyImportSyncResult, CompanyResolveResult } from '@/types'
+import { decodeTxtBuffer, parseCompanyLines } from '@/utils/txt'
 
 const props = defineProps<{ modelValue: boolean }>()
 
@@ -21,7 +21,7 @@ type Step = 'pick' | 'preview' | 'running' | 'result'
 const step = ref<Step>('pick')
 const fileInput = ref<HTMLInputElement | null>(null)
 const fileName = ref('')
-const names = ref<string[]>([])
+const rows = ref<CompanyImportRow[]>([])
 const resolveOnImport = ref(true)
 
 const submitting = ref(false)
@@ -37,7 +37,7 @@ watch(
     if (!v) return
     step.value = 'pick'
     fileName.value = ''
-    names.value = []
+    rows.value = []
     resolveOnImport.value = true
     submitting.value = false
     progress.value = null
@@ -61,9 +61,9 @@ function onFileChange(e: Event) {
   reader.onload = () => {
     try {
       const text = decodeTxtBuffer(reader.result as ArrayBuffer)
-      names.value = parseTxtLines(text)
-      if (!names.value.length) {
-        ElMessage.warning('文件中未解析到公司名，请确认每行一个公司名')
+      rows.value = parseCompanyLines(text)
+      if (!rows.value.length) {
+        ElMessage.warning('文件中未解析到公司信息，请确认每行按「公司全称 城市 行业 性质 官网」以空格排列')
         step.value = 'pick'
         return
       }
@@ -80,9 +80,9 @@ function onFileChange(e: Event) {
   input.value = ''
 }
 
-const previewNames = computed(() => names.value.slice(0, PREVIEW_LIMIT))
+const previewRows = computed(() => rows.value.slice(0, PREVIEW_LIMIT))
 const previewHint = computed(() =>
-  names.value.length > PREVIEW_LIMIT ? `共解析到 ${names.value.length} 条，预览前 ${PREVIEW_LIMIT} 条` : `共解析到 ${names.value.length} 条`,
+  rows.value.length > PREVIEW_LIMIT ? `共解析到 ${rows.value.length} 家公司，预览前 ${PREVIEW_LIMIT} 家` : `共解析到 ${rows.value.length} 家公司`,
 )
 
 // ---------------- 导入提交与轮询 ----------------
@@ -101,10 +101,10 @@ const percent = computed(() => {
 })
 
 async function onConfirm() {
-  if (!names.value.length) return
+  if (!rows.value.length) return
   submitting.value = true
   try {
-    const res = await companiesStore.importCompanies(names.value, resolveOnImport.value)
+    const res = await companiesStore.importCompanies(rows.value, resolveOnImport.value)
     if ('job_id' in res) {
       // 异步批量补全：轮询任务
       step.value = 'running'
@@ -161,7 +161,10 @@ function close() {
 
     <!-- 步骤一：选择文件 -->
     <div v-if="step === 'pick'" class="pick-box">
-      <p class="hint">支持 UTF-8 / GBK 编码的 txt 文件，每行一个公司名；自动忽略空行、去重、跳过已存在公司。</p>
+      <p class="hint">
+        支持 UTF-8 / GBK 编码的 txt 文件，每行一家公司，按「公司全称 城市 行业 公司性质 公司官网」顺序以空格排列；
+        自动忽略空行、按公司名去重、跳过已存在公司。缺失项留空或写「官网未公开」等占位内容时，导入后该项为空。
+      </p>
       <div class="pick-action">
         <el-button type="primary" plain @click="openFilePicker">选择 txt 文件</el-button>
       </div>
@@ -173,13 +176,33 @@ function close() {
         <span class="file-name">{{ fileName }}</span>
         <span class="preview-hint">{{ previewHint }}</span>
       </div>
-      <div class="name-list">
-        <div v-for="(n, i) in previewNames" :key="i" class="name-item">{{ n }}</div>
-        <div v-if="names.length > PREVIEW_LIMIT" class="name-more">… 其余 {{ names.length - PREVIEW_LIMIT }} 条未展示</div>
-      </div>
+      <el-table :data="previewRows" size="small" max-height="240" class="preview-table">
+        <el-table-column prop="name" label="公司全称" min-width="140" show-overflow-tooltip />
+        <el-table-column label="城市" width="80" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.city">{{ row.city }}</span><span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="行业" width="90" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.industry">{{ row.industry }}</span><span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="性质" width="90" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.nature">{{ row.nature }}</span><span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="官网" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.website" class="website-text">{{ row.website }}</span><span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-if="rows.length > PREVIEW_LIMIT" class="name-more">… 其余 {{ rows.length - PREVIEW_LIMIT }} 家未展示</div>
       <div class="resolve-option">
-        <el-checkbox v-model="resolveOnImport">导入后自动补全官网 / 招聘网址 / 行业</el-checkbox>
-        <div class="option-hint">勾选后批量补全走异步任务，逐条展示进度；补全结果需人工确认。</div>
+        <el-checkbox v-model="resolveOnImport">导入后自动补全缺失的官网 / 招聘网址 / 行业</el-checkbox>
+        <div class="option-hint">勾选后批量补全走异步任务，仅填充 txt 中缺失的字段，不覆盖已导入的值；补全结果需人工确认。</div>
       </div>
     </div>
 
@@ -230,10 +253,10 @@ function close() {
         v-if="step === 'preview'"
         type="primary"
         :loading="submitting"
-        :disabled="!names.length"
+        :disabled="!rows.length"
         @click="onConfirm"
       >
-        确认导入（{{ names.length }}）
+        确认导入（{{ rows.length }}）
       </el-button>
       <el-button v-if="step === 'result'" type="primary" @click="close">完成</el-button>
     </template>
@@ -268,21 +291,15 @@ function close() {
   font-size: 12px;
   color: #9ca3af;
 }
-.name-list {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 4px 0;
+.preview-table {
+  width: 100%;
 }
-.name-item {
-  padding: 4px 12px;
-  font-size: 13px;
+.website-text {
+  font-size: 12px;
   color: #374151;
-  border-bottom: 1px solid #f3f4f6;
 }
-.name-item:last-child {
-  border-bottom: none;
+.muted {
+  color: #c0c4cc;
 }
 .name-more {
   padding: 6px 12px;

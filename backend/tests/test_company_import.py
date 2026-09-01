@@ -47,3 +47,40 @@ def test_import_idempotent_second_run_skips_all(app_db):
     assert result["added"] == 2
     result2 = import_companies(["腾讯", "美团"])
     assert result2["added"] == 0 and result2["skipped"] == 2
+
+
+def test_import_structured_rows_with_fields(app_db):
+    """结构化导入：名称+城市/行业/性质/官网 一并落库。"""
+    rows = [
+        {"name": "字节跳动", "city": "北京", "industry": "互联网", "nature": "民营企业",
+         "website": "https://www.bytedance.com"},
+        {"name": "国家电网", "city": "北京", "industry": "能源", "nature": "国企", "website": ""},
+    ]
+    result = import_companies(rows)
+    assert result["added"] == 2
+    from app.dao import get_company
+    bytedance = get_company(result["added_ids"][0])
+    assert bytedance["city"] == "北京"
+    assert bytedance["industry"] == "互联网"
+    assert bytedance["nature"] == "民营企业"
+    assert bytedance["website"] == "https://www.bytedance.com"
+    grid = get_company(result["added_ids"][1])
+    assert grid["nature"] == "国企"
+    assert grid["website"] == ""
+
+
+def test_import_structured_placeholder_values_become_empty(app_db):
+    """占位内容（官网未公开 / 无 / - 等）导入时置空。"""
+    rows = [
+        {"name": "某公司", "city": "官网未公开", "industry": "无", "nature": "-", "website": "未知"},
+        {"name": "  空格公司  ", "city": None, "industry": "", "nature": "/", "website": "N/A"},
+    ]
+    result = import_companies(rows)
+    assert result["added"] == 2
+    from app.dao import get_company
+    for cid in result["added_ids"]:
+        company = get_company(cid)
+        assert company["city"] is None
+        assert company["industry"] is None
+        assert company["nature"] is None
+        assert company["website"] == ""
