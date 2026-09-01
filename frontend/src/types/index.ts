@@ -127,6 +127,10 @@ export interface Company {
   notes: string | null
   last_fetched_at: string | null
   last_fetch_result: string | null
+  /** 处理状态标签：0=未处理 1=已处理 */
+  processed: number
+  /** 该公司的岗位数（列表接口附带，展开列提示用） */
+  job_count?: number
   created_at: string
 }
 
@@ -137,6 +141,13 @@ export interface CompanyPayload {
   city?: string | null
   nature?: string | null
   notes?: string | null
+}
+
+/** 公司库筛选候选池（GET /api/companies/facets）：各列为 DISTINCT 非空值排序列表 */
+export interface CompanyFacets {
+  cities: string[]
+  industries: string[]
+  natures: string[]
 }
 
 /** 单公司按名称补全结果（POST /api/companies/resolve、POST /api/companies/{id}/resolve、批量 resolve 任务结果项） */
@@ -154,24 +165,6 @@ export interface CompanyResolveResult {
   error?: string | null
 }
 
-/** 批量探测任务结果项（type=probe_batch） */
-export interface BatchProbeItem {
-  company_id: string
-  name: string | null
-  status: '成功' | '需人工' | 'skipped' | 'failed'
-  career_url?: string | null
-  error?: string | null
-}
-
-export interface BatchProbeResult {
-  results: BatchProbeItem[]
-  ok: number
-  manual: number
-  failed: number
-  skipped: number
-  total: number
-}
-
 /** 同步批量导入结果（POST /api/companies/import，resolve=false） */
 export interface CompanyImportSyncResult {
   added: number
@@ -179,18 +172,13 @@ export interface CompanyImportSyncResult {
   skipped_names: string[]
 }
 
-export interface ProbeCandidate {
-  url: string
-  confidence: 'high' | 'medium' | 'low'
-  source: string
-  reason: string
-}
-
-export interface FetchTaskResult {
-  ats_type?: string | null
-  career_url?: string | null
-  job_candidates?: JobCandidate[]
-  count?: number
+/** txt 批量导入单行解析结果 / 结构化导入条目（缺失属性为 null，后端按空处理） */
+export interface CompanyImportRow {
+  name: string
+  city: string | null
+  industry: string | null
+  nature: string | null
+  website: string | null
 }
 
 export interface TaskResult {
@@ -198,9 +186,7 @@ export interface TaskResult {
   type: string
   status: 'queued' | 'running' | 'done' | 'failed'
   progress: string | null
-  result:
-    | (({ candidates?: ProbeCandidate[] } & FetchTaskResult) & { results?: CompanyResolveResult[] })
-    | null
+  result: { results?: CompanyResolveResult[] } | null
   error: { code: string; message: string } | null
   queue_length?: number
   created_at: string

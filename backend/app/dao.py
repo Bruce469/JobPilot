@@ -23,7 +23,7 @@ JOB_COLS = (
 COMPANY_COLS = (
     "id", "name", "website", "career_url", "industry", "city", "nature",
     "probe_status", "ats_type", "notes", "last_fetched_at", "last_fetch_result",
-    "created_at",
+    "processed", "created_at",
 )
 RESUME_COLS = (
     "id", "name", "basic", "education", "experience", "projects", "skills",
@@ -265,13 +265,20 @@ def get_company_by_name(name: str):
 def list_companies(filters: dict | None = None) -> list:
     filters = filters or {}
     conds, params = [], []
-    if filters.get("city"):
-        conds.append("city LIKE ?")
-        params.append(f"%{filters['city']}%")
-    for col in ("industry", "nature"):
-        if filters.get(col):
-            conds.append(f"{col} = ?")
-            params.append(filters[col])
+    for col in ("city", "industry"):
+        vals = filters.get(col)
+        if not vals:
+            continue
+        if isinstance(vals, str):  # 兼容旧调用：单值字符串视为单个精确值
+            vals = [vals]
+        conds.append(f"{col} IN ({','.join('?' * len(vals))})")
+        params.extend(vals)
+    if filters.get("nature"):            # 性质保持单值精确 =
+        conds.append("nature = ?")
+        params.append(filters["nature"])
+    if "processed" in filters and filters["processed"] is not None:  # 0/1 精确匹配（0 需显式判断）
+        conds.append("processed = ?")
+        params.append(1 if filters["processed"] else 0)
     if filters.get("keyword"):
         kw = f"%{filters['keyword']}%"
         conds.append("name LIKE ?")
@@ -279,9 +286,23 @@ def list_companies(filters: dict | None = None) -> list:
     where = ("WHERE " + " AND ".join(conds)) if conds else ""
     with closing(get_conn()) as conn:
         rows = conn.execute(
-            f"SELECT * FROM companies {where} ORDER BY created_at DESC, id", params
+            f"SELECT c.*, (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id) AS job_count"
+            f" FROM companies c {where} ORDER BY c.created_at DESC, c.id", params
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def company_facets() -> dict:
+    """公司库筛选候选池：city/industry/nature 三列各自 DISTINCT 非空非空串值，按值排序。"""
+    out = {}
+    with closing(get_conn()) as conn:
+        for col, key in (("city", "cities"), ("industry", "industries"), ("nature", "natures")):
+            rows = conn.execute(
+                f"SELECT DISTINCT {col} FROM companies "
+                f"WHERE {col} IS NOT NULL AND {col} != '' ORDER BY {col}"
+            ).fetchall()
+            out[key] = [r[0] for r in rows]
+    return out
 
 
 def create_company(data: dict) -> dict:
@@ -294,6 +315,7 @@ def create_company(data: dict) -> dict:
         "probe_status": data.get("probe_status") or "未探测", "ats_type": data.get("ats_type"),
         "notes": data.get("notes"), "last_fetched_at": data.get("last_fetched_at"),
         "last_fetch_result": data.get("last_fetch_result"),
+        "processed": 1 if data.get("processed") else 0,
         "created_at": data.get("created_at") or now,
     }
     cols = ", ".join(COMPANY_COLS)
@@ -406,6 +428,7 @@ def replace_all(companies: list[dict], resumes: list[dict], jobs: list[dict]) ->
                 row = {col: c.get(col) for col in COMPANY_COLS}
                 row["created_at"] = row["created_at"] or util.now_iso()
                 row["probe_status"] = row["probe_status"] or "未探测"
+                row["processed"] = 1 if row["processed"] else 0
                 conn.execute(
                     f"INSERT INTO companies ({', '.join(COMPANY_COLS)}) VALUES ({', '.join('?' * len(COMPANY_COLS))})",
                     [row[col] for col in COMPANY_COLS],

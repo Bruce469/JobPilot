@@ -124,8 +124,17 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 
 ### GET /api/companies
 查询公司库（支持筛选，参数均可选，组合生效）：
-`?city=北京`（城市 LIKE 模糊）、`?industry=互联网`（行业精确）、`?nature=国企`（公司性质精确）、`?keyword=字节`（公司名 LIKE 模糊）。
-响应 `{items, total}`，item 含 `city`（城市）、`nature`（公司性质：国企/央企/私企/外企/合资/事业单位/其他，可自定义）。
+`?city=北京,深圳`（城市多值精确 IN，逗号分隔，匹配任一即命中）、`?industry=互联网,能源`（行业多值精确 IN，逗号分隔）、`?nature=国企`（公司性质精确，单值）、`?processed=1`（处理状态：0=未处理 / 1=已处理）、`?keyword=字节`（公司名 LIKE 模糊）。
+城市/行业单值传参天然兼容（`?city=北京` 等价于 `city=["北京"]`）；城市为精确匹配，不再前缀模糊（`city=北` 不命中"北京"）。
+响应 `{items, total}`，item 含 `city`（城市）、`nature`（公司性质：国企/央企/私企/外企/合资/事业单位/其他，可自定义）、`processed`（0=未处理 1=已处理，新建默认未处理）、`job_count`（该公司岗位数，供展开列提示）。
+
+### GET /api/companies/facets
+公司库筛选候选池（多选弹窗/下拉选项数据源）：响应 `{cities, industries, natures}`，各为对应列 `DISTINCT` 去重后的非空非空串值，按值升序（SQLite Unicode 码点序；城市前端拼音排序由前端二次处理）。
+响应示例：
+
+```json
+{ "cities": ["北京", "上海", "深圳"], "industries": ["互联网", "能源", "金融"], "natures": ["国企", "私企", "央企"] }
+```
 
 ### POST /api/companies
 请求体 `{ "name": "...", "website": "...", "industry": null, "city": null, "nature": null, "notes": null }`；`name` 重复返回 409 CONFLICT。响应 201 + company。
@@ -147,9 +156,6 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 
 ### POST /api/companies/batch-delete
 批量删除公司。请求体 `{ "ids": ["uuid", "..."] }`。响应 200 `{ "deleted": n }`。先解除关联岗位（岗位保留、`company_id` 置空），再物理删除；不存在的 id 忽略。
-
-### POST /api/companies/batch-probe
-批量探测招聘入口（与单条 probe 语义一致）。请求体 `{ "ids": ["uuid", "..."] }`。响应 202 `{ "job_id": "uuid", "type": "probe_batch" }`。逐公司写 `probe_status`（有候选「成功」/ 无候选「需人工」），`career_url` 仅在公司缺失时写入最高置信度候选；单公司失败不阻塞其余。空 ids 返回 400 VALIDATION_ERROR。
 
 ### POST /api/companies/batch-resolve
 批量补全已存公司（与 import 的 resolve 任务同一实现）。请求体 `{ "ids": ["uuid", "..."] }`。响应 202 `{ "job_id": "uuid", "type": "resolve" }`。结果自动写入缺失字段（不覆盖已有值）；单公司失败不阻塞其余。空 ids 返回 400 VALIDATION_ERROR。
@@ -186,14 +192,11 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 
 公司不存在返回 404 NOT_FOUND。
 
+### GET /api/companies/{id}/jobs
+该公司全部岗位（公司库展开列表数据源）。响应 `{items, total}`，item 为完整 job（含 status/position/city/job_url 等）。公司不存在 404。
+
 ### GET/PUT/DELETE /api/companies/{id}
-详情 / 更新（可人工修正 `career_url` 等）/ 删除（不删岗位，岗位 company_id 置空），删除 204。
-
-### POST /api/companies/{id}/probe
-异步探测招聘入口。响应 202 `{ "job_id": "uuid", "type": "probe" }`。
-
-### POST /api/companies/{id}/fetch
-异步抓取岗位。请求体可选 `{ "career_url": "https://..." }`（不传用公司已存 career_url）。响应 202 `{ "job_id": "uuid", "type": "fetch" }`。
+详情 / 更新（可人工修正 `career_url` 等；更新支持 `processed` 布尔字段切换已处理/未处理）/ 删除（不删岗位，岗位 company_id 置空），删除 204。
 
 ---
 
@@ -202,13 +205,8 @@ Base URL：`http://127.0.0.1:<port>/api`；Content-Type `application/json`（UTF
 ### GET /api/tasks/{job_id}
 轮询：`{ "job_id", "type", "status": "queued|running|done|failed", "progress", "result", "error" }`。
 
-- probe 的 result：`{ "candidates": [ { "url", "confidence": "high|medium|low", "source": "homepage|sitemap|subdomain|existing", "reason" } ] }`
-- fetch 的 result：`{ "ats_type": "greenhouse|lever|feishu|jsonld", "career_url", "job_candidates": [ { "position", "city", "job_url", "source_job_id", "deadline", "degree", "job_type" } ], "count" }`
 - resolve 的 result（批量自动补全，结果自动写入缺失字段）：`{ "results": [ { "company_id", "name", "website", "industry", "city", "nature", "career_url", "source": "mapping|search|failed|skipped", "confidence?", "error?" } ], "resolved": n, "total": m }`；progress 为「已补全 x/m」。仅填充缺失字段（website/industry/career_url/city/nature），不覆盖已有值；非映射公司主体信息已完整、仅缺城市/性质时跳过（避免无意义网络搜索，搜索兜底对这两项只能尽力提取）。
-- probe_batch 的 result：`{ "results": [ { "company_id", "name", "status": "成功|需人工|failed", "career_url?", "error?" } ], "ok": n, "manual": n, "failed": n, "total": m }`；progress 为「已探测 x/m」。
-- error：`{ "code": "ROBOTS_DISALLOW|TIMEOUT|NO_CAREER_URL|HTTP_ERROR|...", "message" }`
-
-任务失败时公司 `probe_status=需人工`；抓取超时 `last_fetch_result="超时，请手动录入"`。
+- error：`{ "code": "TIMEOUT|HTTP_ERROR|...", "message" }`
 
 ---
 

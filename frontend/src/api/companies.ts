@@ -1,23 +1,33 @@
 import http from './http'
-import type { Company, CompanyImportSyncResult, CompanyPayload, CompanyResolveResult } from '@/types'
+import type { Company, CompanyFacets, CompanyImportRow, CompanyImportSyncResult, CompanyPayload, CompanyResolveResult, Job } from '@/types'
 import type { ListResult } from './jobs'
 
 export interface CompanyFilters {
-  city?: string | null
-  industry?: string | null
+  /** 城市多值（发请求时逗号拼接为 `city=北京,深圳`，精确 IN 匹配）；空数组/undefined 不传 */
+  city?: string[] | null
+  /** 行业多值（发请求时逗号拼接为 `industry=互联网,能源`，精确 IN 匹配）；空数组/undefined 不传 */
+  industry?: string[] | null
   nature?: string | null
+  /** 处理状态：0=未处理 1=已处理；null/undefined 不筛 */
+  processed?: number | null
   keyword?: string | null
 }
 
 export function listCompanies(filters?: CompanyFilters): Promise<ListResult<Company>> {
   const params: Record<string, string> = {}
   if (filters) {
-    if (filters.city) params.city = filters.city
-    if (filters.industry) params.industry = filters.industry
+    if (filters.city?.length) params.city = filters.city.join(',')
+    if (filters.industry?.length) params.industry = filters.industry.join(',')
     if (filters.nature) params.nature = filters.nature
+    if (filters.processed != null) params.processed = String(filters.processed)
     if (filters.keyword) params.keyword = filters.keyword
   }
   return http.get<ListResult<Company>>('/companies', { params }).then((r) => r.data)
+}
+
+/** 公司库筛选候选池：{cities, industries, natures} 各为 DISTINCT 非空值排序列表 */
+export function getCompanyFacets(): Promise<CompanyFacets> {
+  return http.get<CompanyFacets>('/companies/facets').then((r) => r.data)
 }
 
 export function createCompany(payload: CompanyPayload): Promise<Company> {
@@ -32,28 +42,19 @@ export function deleteCompany(id: string): Promise<void> {
   return http.delete(`/companies/${id}`).then(() => undefined)
 }
 
+/** 某公司的全部岗位（公司库展开列表数据源，GET /api/companies/{id}/jobs） */
+export function listCompanyJobs(companyId: string): Promise<ListResult<Job>> {
+  return http.get<ListResult<Job>>(`/companies/${companyId}/jobs`).then((r) => r.data)
+}
+
 export interface AsyncTaskRef {
   job_id: string
-  type: 'probe' | 'fetch' | 'probe_batch' | 'resolve'
-}
-
-export function probeCompany(id: string): Promise<AsyncTaskRef> {
-  return http.post<AsyncTaskRef>(`/companies/${id}/probe`).then((r) => r.data)
-}
-
-export function fetchCompanyJobs(id: string, careerUrl?: string): Promise<AsyncTaskRef> {
-  const body = careerUrl ? { career_url: careerUrl } : {}
-  return http.post<AsyncTaskRef>(`/companies/${id}/fetch`, body).then((r) => r.data)
+  type: string
 }
 
 /** 批量删除公司（POST /api/companies/batch-delete） */
 export function batchDeleteCompanies(ids: string[]): Promise<{ deleted: number }> {
   return http.post<{ deleted: number }>('/companies/batch-delete', { ids }).then((r) => r.data)
-}
-
-/** 批量探测招聘页（POST /api/companies/batch-probe，异步任务） */
-export function batchProbeCompanies(ids: string[]): Promise<AsyncTaskRef> {
-  return http.post<AsyncTaskRef>('/companies/batch-probe', { ids }).then((r) => r.data)
 }
 
 /** 批量补全已存公司（POST /api/companies/batch-resolve，异步任务，结果自动写入缺失字段） */
@@ -66,12 +67,13 @@ export type ImportCompaniesResult = CompanyImportSyncResult | { job_id: string }
 
 /**
  * 批量导入公司（POST /api/companies/import）
+ * - rows 为结构化条目（公司全称 + 可选 城市/行业/性质/官网）
+ * - resolve=true：创建后异步批量补全缺失字段，返回 {job_id}，用 GET /api/tasks/{job_id} 轮询
  * - resolve=false：同步新增，返回 {added, skipped, skipped_names}
- * - resolve=true：异步批量补全，返回 {job_id}，用 GET /api/tasks/{job_id} 轮询
  */
-export function importCompanies(names: string[], resolve?: boolean): Promise<ImportCompaniesResult> {
+export function importCompanies(rows: CompanyImportRow[], resolve?: boolean): Promise<ImportCompaniesResult> {
   return http
-    .post<ImportCompaniesResult>('/companies/import', { names, resolve: resolve ?? true })
+    .post<ImportCompaniesResult>('/companies/import', { companies: rows, resolve: resolve ?? true })
     .then((r) => r.data)
 }
 

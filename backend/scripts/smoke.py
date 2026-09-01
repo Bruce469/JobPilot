@@ -191,19 +191,6 @@ def main() -> int:
         check("stats 数字合理", s["total_applied"] >= s["active"] and len(s["weekly_trend"]) == 4)
 
         # ---- 异步任务 ----
-        r = httpx.post(f"{base}/companies", json={"name": "不可达公司", "website": "http://127.0.0.1:9"},
-                       headers=headers, timeout=5)
-        bad_cid = r.json()["id"]
-        r = httpx.post(f"{base}/companies/{bad_cid}/probe", headers=headers, timeout=5)
-        check("probe 返回 202 + job_id", r.status_code == 202 and bool(r.json().get("job_id")), r.text)
-        task = poll_task(base, r.json()["job_id"], headers)
-        check("probe 任务有终态", task["status"] in ("done", "failed"), json.dumps(task, ensure_ascii=False))
-        r = httpx.post(f"{base}/companies/{cid}/fetch", headers=headers, timeout=5)
-        check("fetch 返回 202", r.status_code == 202 and r.json()["type"] == "fetch", r.text)
-        task = poll_task(base, r.json()["job_id"], headers)
-        check("无 career_url 的 fetch 失败 NO_CAREER_URL",
-              task["status"] == "failed" and task["error"]["code"] == "NO_CAREER_URL",
-              json.dumps(task, ensure_ascii=False))
         r = httpx.get(f"{base}/tasks/not-exist", headers=headers, timeout=5)
         check("不存在的任务 404", r.status_code == 404)
 

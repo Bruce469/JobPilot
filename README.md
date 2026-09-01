@@ -10,7 +10,7 @@
 ![SQLite](https://img.shields.io/badge/SQLite-WAL-orange)
 ![XGBoost R²](https://img.shields.io/badge/薪资模型%20R%C2%B2-0.5144-success)
 ![数据](https://img.shields.io/badge/市场数据-10%2C114%20条-blue)
-![测试](https://img.shields.io/badge/自动化测试-281%20passed-brightgreen)
+![测试](https://img.shields.io/badge/自动化测试-288%20passed-brightgreen)
 
 ---
 
@@ -44,7 +44,7 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 | **岗位看板** | 9 状态流转看板（待投递 → 已投递 → 笔试 → 一面/二面/三面·HR面 → 已Offer/已拒绝/已放弃），跨列拖拽流转；每次流转自动写入时间线事件；终态默认收起。卡片直显安排时间 / 未通过环节标签 / 最近备注 |
 | **岗位列表** | 关键词搜索 + 状态/城市/行业/渠道多条件组合筛选、列排序、批量删除、行内流转。流转弹窗按目标状态动态出现字段：等待环节（笔试/一面/二面/三面·HR面）可填**安排时间**（列表直显、过期标红、编辑弹窗可改期）、流转「已拒绝」可选**未通过环节标签**（简历挂/笔试挂/一面挂/二面挂/三面挂/HR挂/其他，按来源状态智能预填）；流转备注直显在状态格；投递时间新建默认当天、编辑回显原值；「今日/本周安排」「即将截止 ≤3 天」聚合 |
 | **简历管理** | 多份简历 CRUD（结构化区块：基本信息/教育/实习/项目/技能/自我评价）；**支持上传已有 PDF 简历**（≤10MB，列表/编辑页在线预览，对照源 PDF 补录结构化内容）；A4 版式渲染 + `window.print()` 打印/另存 PDF；岗位绑定简历版本（名称快照冻结）；删除被引用简历有引用计数保护 |
-| **公司库** | txt 批量导入；输入公司名自动补全官网/招聘页/行业（四级数据流水线，见[难点 6](#难点-6公司名--官网自动补全的低误配率四级数据流水线)）；官网招聘页自动探测 + 一键抓取岗位并去重导入 |
+| **公司库** | txt 批量导入；输入公司名自动补全官网/招聘页/行业（四级数据流水线，见[难点 4](#难点-4公司名--官网自动补全的低误配率四级数据流水线)）；公司可直接添加岗位并在展开列表统一管理（增/删）；已处理/未处理标签 + 与城市/行业/公司性质组合筛选 |
 | **统计** | 总投递/进行中/已Offer/已拒绝/待跟进卡片 + 漏斗图/渠道分布/近 4 周趋势（指标口径定义于 PRD） |
 | **备份** | JSON 全量导出导入（merge 以本机为准 / overwrite 二次确认全替），schema_version 校验防版本错乱；距上次备份 >7 天启动提醒 |
 
@@ -85,8 +85,8 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 │  后端（FastAPI 单进程，uvicorn 仅绑 127.0.0.1:8000）                           │
 │  ├─ 安全中间件链：Host 头校验 → token 校验（CORS 白名单内层处理预检）           │
 │  ├─ 投递域 app/：jobs / resumes / companies / tasks / backup / stats          │
-│  │    └─ fetcher/：probe 探测分层 → ATS 适配器(Greenhouse/Lever/飞书) →        │
-│  │       JSON-LD 兜底｜限速器｜内存任务表+后台线程｜公司补全四级流水线           │
+│  │    └─ fetcher/：公司补全四级流水线（映射表/A股库/ICP/搜索兜底）｜        │
+│  │       限速器｜内存任务表+后台线程（批量补全异步任务）                       │
 │  ├─ 市场域 market/：crawl(adapter) → etl → analyze/nlp → model(XGBoost)       │
 │  │    └─ APIRouter：health / jobs / summary / meta / predict                   │
 │  └─ DAO 层：sqlite3 标准库参数化 SQL（投递域）+ SQLAlchemy 2.x（市场域）        │
@@ -121,7 +121,7 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 |---|---|---|
 | 框架 | FastAPI + Pydantic v2 | 请求/响应 schema 单一事实源，统一错误结构 |
 | 存储 | SQLite (WAL) | 投递域用标准库 `sqlite3` 参数化 SQL + 编号迁移脚本；市场域用 SQLAlchemy 2.x ORM |
-| 抓取 | httpx + BeautifulSoup4 | 固定 UA、10s 超时、限速器令牌桶 |
+| HTTP 请求 | httpx + BeautifulSoup4 | 补全搜索兜底与市场爬虫：固定 UA、10s 超时、限速器令牌桶 |
 | 异步任务 | 内存任务表 + threading 后台线程 | HTTP 202 + 前端轮询，替代 Celery/Redis |
 | 数据科学 | pandas / numpy / XGBoost / scikit-learn | ETL、特征工程、薪资建模 |
 | NLP | jieba + wordcloud + 自定义词典/停用词/89 技能词表 | 中文 JD 技能抽取 |
@@ -133,40 +133,19 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 
 > 以下均来自开发过程中的真实踩坑，按域归类。更详细的评审记录见 `docs/review.md`、`docs/security-review.md`、`docs/test-report.md`、`docs/merge-test-report.md`。
 
-### 难点 1：不引入无头浏览器的前提下抓取官网招聘页
+### 难点 1：秒级～几十秒的批量补全任务不能卡死 UI
 
-**问题**：目标页面千差万别——Greenhouse/Lever 托管的站点结构各异，国内大量招聘站（如飞书招聘）是 JS 渲染 SPA，静态 HTML 里根本没有岗位列表。
+**问题**：公司批量补全需要逐家串行网络请求（每家 5~30 秒，最多 60 家），同步接口会阻塞前后端交互；个人工具又扛不起 Celery + Redis broker 的重依赖。
 
-**解决**：
-- 抽象 `ATSAdapter` 协议（`detect()` + `extract_jobs()`），实现注册表机制，新增 ATS 只加一个类、业务层零改动；
-- Greenhouse/Lever 绕过 HTML 直接调其公开 board API（JSON 稳定字段），HTML 解析只做失败回退；
-- 飞书这类无公开 API 的 SPA，抓取 HTML 后从 `__NEXT_DATA__` / `window.__INITIAL_STATE__` 等常见注入点提取内嵌 JSON，多注入点依次尝试；
-- 通用兜底解析器解析 `<script type="application/ld+json">` 中 `@type=JobPosting` 的结构化数据，覆盖未来大量采用 SEO 结构化标注的官网；
-- 全链路失败的降级路径是一等公民：任务标记失败原因（而非静默空结果），前端提示「保留链接+手动录入」。整体用本地 mock 招聘站做了探测/抓取/导入/降级四条路径的端到端验收。
+**解决**：进程内的轻量异步方案——内存任务表（`dict + Lock`）+ 单个后台守护线程串行消费队列；提交接口立即返回 202 + `job_id`，前端每 1~2s 轮询进度直到 done/failed（进度文本带「已补全 x/m」）；批量任务每家公司独立 60s 预算、总预算封顶，超时置败并保留已完成部分；保留最近 N 条防止内存增长。单用户场景下串行执行等价于天然限速，且重启丢任务可接受（操作本身幂等，重试即可）。
 
-### 难点 2：爬虫合规与反爬的现实边界
-
-**问题**：主爬源 51job 全端点实测被阿里云 WAF 深度保护（JS 挑战）；直接硬刚既不可行也不合规。
-
-**解决**：明确「不逆向、不绕过验证码/WAF」的项目边界：
-- 51job adapter 保留骨架但实测结论记录在案，pipeline 直接标记该源不可用、不再发起请求；转向接入**公开免登录 JSON 接口**的国聘网/牛客网作为实时源，再以开源数据集兜底——最终数据规模不受影响；
-- 公司官网抓取：请求前检查 robots.txt，Disallow 即停止并把公司标记「需人工」（有专门的单测验证此降级路径）；
-- 双层限速器：全局令牌桶 ≤30 req/min + 同域名间隔 ≥1.5s，串行工作线程天然低并发；
-- market 爬虫随机 UA 池 + 2~5s 随机延时 + 3 次指数退避，识别到 403/429/验证码/封禁标记后**不重试**、立即熔断告警。
-
-### 难点 3：秒级～几十秒的抓取任务不能卡死 UI
-
-**问题**：探测+抓取耗时远超一次正常 HTTP 请求的合理时长，同步接口会阻塞前后端交互；个人工具又扛不起 Celery + Redis broker 的重依赖。
-
-**解决**：进程内的轻量异步方案——内存任务表（`dict + Lock`）+ 单个后台守护线程串行消费队列；提交接口立即返回 202 + `job_id`，前端每 1~2s 轮询进度直到 done/failed；任务超时（60s）强制置败并提示手动录入；保留最近 N 条防止内存增长。单用户场景下串行执行等价于天然限速，且重启丢任务可接受（操作本身幂等，重试即可）。
-
-### 难点 4：Starlette 中间件的注册顺序陷阱
+### 难点 2：Starlette 中间件的注册顺序陷阱
 
 **问题**：集成测试发现「CORS 白名单先注册」的注释与实际行为不符——带合法 Origin 但不带 token 的预检请求被 401 拦截而不是由 CORS 放行。根因是 Starlette 的 `add_middleware` 采用头插法，**后注册的在最外层**，实际 security 中间件包住了 CORS。
 
 **解决**：security 中间件对 `OPTIONS` 预检请求显式放行（预检仍受 Host 校验保护），交给内层 CORS 处理；修正误导性注释，并将「恶意 Host 403 / 无 token 401 / 白名单 Origin 预检返回 ACAO」全部固化为冒烟断言防回归。这个坑的价值在于：注释会撒谎，只有运行时断言不会。
 
-### 难点 5：无登录体系下的安全信任边界
+### 难点 3：无登录体系下的安全信任边界
 
 **问题**：纯本机工具不想引入登录，但仍要防御两类攻击——浏览器被恶意页面诱导访问本机服务（跨站诱导读取），以及 DNS rebinding（恶意域名解析到 127.0.0.1 绕过同源策略）。
 
@@ -176,7 +155,7 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 - 启动时 `secrets.token_hex(32)` 生成一次性 token 经 `/api/boot` 下发，后续请求校验 `X-Auth-Token`；配合 CORS 白名单（仅 dev 来源）。
 - 上线前安全审查还揪出一个中危问题：`market.cli api` 调试入口能绕过宿主全部安全中间件独立起服——已删除该入口和模块级 `app` 实例，消除了唯一的防护绕过面。教训：**每一个独立的 uvicorn 入口都是一条独立的攻击面**。
 
-### 难点 6：公司名 → 官网自动补全的低误配率（四级数据流水线）
+### 难点 4：公司名 → 官网自动补全的低误配率（四级数据流水线）
 
 **问题**：「按公司名自动找到它的官网和招聘页」听起来简单，实际极易误配——Bing 对长中文公司名的搜索结果高度碎片化，搜索引擎/知乎/CSDN/企查查/Boss直聘……几乎任何结果页都"包含"公司名，采信第一个结果就会张冠李戴。
 
@@ -188,13 +167,13 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
    - 全部失败则返回 failed 不写任何字段，批量导入场景下留待人工。
    - resolve 层完整复用了限速器，保证流水线自身也守规矩。
 
-### 难点 7：招聘平台上薪资文本的脏乱差
+### 难点 5：招聘平台上薪资文本的脏乱差
 
 **问题**：原始数据的薪资字段五花八门：「面议」「15-25K·14薪」「200-400元/天」「2万-3万」「15000以上」，单位混杂（k/万/元）、周期混杂（月/天/年），无法直接用于统计与建模。
 
 **解决**：沉淀为 **9 条规则的薪资归一化纯函数**：区间取中位数、实习日薪 ×20 折算月薪、k/万 单位换算、「·14薪」年度薪折月、异常值检测剔除面议等。关键是做成无副作用纯函数——9 条规则全部有针对性单测，坏例子随 bug 永久进入测试集。清洗前后的质量差异固化为机器可读的数据质量报告（量化 nan 公司名占比、行业未标注占比），让「数据有多脏」成为可度量事实。
 
-### 难点 8：小样本中文岗位文本上把 R² 做 ≥0.50
+### 难点 6：小样本中文岗位文本上把 R² 做 ≥0.50
 
 **问题**：仅约 7,200 条可用样本，主要信号却藏在非结构化的中文岗位标题/JD 文本里，线性回归基线只有 R² ≈ 0.34~0.47。
 
@@ -205,7 +184,7 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 - 最终 XGBoost 达到 **R² = 0.5144 / MAE = 8,733 元**，显著优于线性回归基线（0.4652）与均值基线（≈0）。
 - 同样重要的是诚实报告局限：特征重要性第一名是「行业未标注」（占 82% 的缺失桶），说明还有信息没挖干净；这决定了后续优化方向（行业回填）而不是继续堆树模型超参。
 
-### 难点 9：两个独立项目合并成单进程单库应用
+### 难点 7：两个独立项目合并成单进程单库应用
 
 **问题**：投递助手（原生 sqlite3 + 自建 DAO）与 JobPulse（SQLAlchemy + MySQL/SQLite 双驱动）技术形态完全不同，要合并成一个用户只有一个数据库文件的应用，还不能破坏彼此的数据与安全模型。
 
@@ -215,25 +194,25 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 - 协同点走显式契约：市场岗位导入经过字段映射 + 查重 + 空值拦截三层转换，保证「脏的市场数据」永不污染「干净的投递库」。
 - 合并后做了全量回归（见成果），而非假设"挂上去就能跑"。
 
-### 难点 10：SQLite 的并发与可靠性细节
+### 难点 8：SQLite 的并发与可靠性细节
 
-**问题**：后台抓取线程与请求线程会同时读写同一个文件库，埋着锁冲突和数据损坏风险。
+**问题**：后台任务线程（批量补全）与请求线程会同时读写同一个文件库，埋着锁冲突和数据损坏风险。
 
 **解决**：`PRAGMA journal_mode=WAL`（读写互不阻塞）+ `foreign_keys=ON` + `busy_timeout=5000`；DAO 层提供连接工厂、每操作短连接（`with closing(conn)`），线程间绝不共享连接；时间线事件拆独立表（而非 JSON 列）换取索引检索能力（ADR-2）。此外全库备份以 JSON 导出为主 WAL 为辅，启动 >7 天未备份主动提醒。
 
-### 难点 11：简历源 PDF 在线预览——iframe 带不了鉴权头
+### 难点 9：简历源 PDF 在线预览——iframe 带不了鉴权头
 
 **问题**：全站 API 靠 `X-Auth-Token` 自定义头鉴权，但 `<iframe src>` 发起的请求带不了自定义头——直接把 PDF 端点塞进 iframe 必然 401。放宽中间件允许 `?token=` 查询参数又等于在 URL/日志/历史记录里泄漏凭证，否决。
 
 **解决**：预览走「带鉴权的数据通道」而非「带鉴权的资源地址」——用 axios（拦截器自动注入 token）以 `responseType: 'blob'` 拉取 PDF 字节流，`URL.createObjectURL` 生成带随机指纹的 blob URL 喂给 iframe，关闭时 `revokeObjectURL` 释放；组件对「拉取期间用户已关闭」做了竞态防护。鉴权模型零放宽，浏览器原生 PDF 查看器的缩放/翻页/另存全部白嫖。上传侧同理收紧：仅收 `.pdf` 扩展名 + `%PDF-` 魔数 + 10MB 封顶（后端按 `MAX+1` 读入防超大文件整体进内存），附件按简历 ID 落盘、随简历删除事务外 best-effort 清理。
 
-### 难点 12：「删除后列表不刷新」的幽灵 bug——axios 对 204 返回的是空串
+### 难点 10：「删除后列表不刷新」的幽灵 bug——axios 对 204 返回的是空串
 
 **问题**：删除简历后必须手动刷新列表，行才消失。接口返回 204、store 也写了 `items = items.filter(...)`，逻辑看起来无懈可击。
 
 **解决**：根因是一行类型宽度不一致的判断——store 声明 `deleteResume(): Promise<DeleteResumeResult | undefined>`，判定写的是 `result === undefined || result.deleted`；而 axios 对 204 空响应实际返回的是**空字符串 `''`**（不是 `undefined`），于是既不满足「未删除」分支也不满足「已删除」分支，行永远留在列表里。修复为 `!result || result.deleted` 同时兼容两种空值形态，并在浏览器里端到端复验了删除与强制删除两条路径。教训：**对「空」的判断要按运行时真实形态写，而不是按 TS 类型标注写**。
 
-### 难点 13：状态体系重整——改语义不改历史，字段生命周期随状态自动管理
+### 难点 11：状态体系重整——改语义不改历史，字段生命周期随状态自动管理
 
 **问题**：随着使用浮现三类真实痛点：「已投递」与「简历筛选」语义重复；等待笔试/面试时时间只能记在备注里但列表看不见；被拒后想标「挂在哪一轮」只能靠翻时间线。直接改状态枚举牵一发动全身——存量数据、历史事件、看板列、漏斗统计、前后端五处枚举都要一致。
 
@@ -274,6 +253,20 @@ Vue 3 + TypeScript + FastAPI + SQLite，所有业务数据 100% 存本机，不�
 | 浏览器端到端 | 上传→预览→删除清理、流转→安排时间→过期标红、拒绝→标签、备注直显、改期，逐项人工验证通过 |
 
 迁移 006 对存量数据做了升级前后的专用验证：独立临时库先建到 005 版本、注入旧状态数据，再 `db.migrate()` 升级，断言状态归并与新列就位。
+
+### 迭代回归（公司库功能迭代，2026-09-01）
+
+| 套件 | 结果 |
+|---|---|
+| 投递域 pytest | **137 passed**（新增 9：处理状态筛选 4、公司岗位接口 5；下线探测/抓取并删对应用例 9） |
+| 市场域 pytest（联网用例默认跳过） | **125 passed** |
+| 前端类型检查 vue-tsc | 零错误 |
+| 前端 Vitest | **99 passed** |
+| 前端生产构建 | 成功 |
+| 后端冒烟 | **37 通过 / 0 失败**（随探测/抓取下线收敛断言数） |
+| 浏览器端到端 | 处理状态筛选与行内切换、公司展开岗位列表、添加/删除岗位，逐项人工验证通过 |
+
+公司库三项迭代：① 下线从未成功的「探测/抓取」及批量探测（连带修复操作后列表被重置为未筛选的 bug）；② 新增「已处理/未处理」标签（迁移 007）与顶部组合筛选；③ 公司行内直接添加岗位 + 展开列表统一管理（新增 `GET /api/companies/{id}/jobs`，列表附带 `job_count`）。
 
 ### 数据与模型成果
 
@@ -341,13 +334,13 @@ ICP_API_URL=http://127.0.0.1:16181 python run.py  # 启用 ICP 备案反查补�
 | GET | `/api/boot` | 下发随机 token、schema_version、备份提醒 |
 | GET/POST | `/api/jobs` | 岗位列表（多维筛选/排序）/ 创建 |
 | GET/PUT/DELETE | `/api/jobs/{id}` | 详情（含时间线）/ 更新 / 删除 |
-| POST | `/api/jobs/batch-delete` · `/api/jobs/import` | 批量删除 / 抓取结果去重导入 |
+| POST | `/api/jobs/batch-delete` · `/api/jobs/import` | 批量删除 / 岗位批量导入（去重） |
 | POST | `/api/jobs/{id}/status` | 状态流转（事务写 job_events + next_time/fail_stage/last_note 状态机规则，终态管理 ended_at） |
 | GET/POST | `/api/resumes` 及 `/api/resumes/{id}` | 简历 CRUD（删除引用保护 `referenced_by`） |
 | POST | `/api/resumes/upload-pdf` | 上传源 PDF 建简历（仅 .pdf + 魔数校验 + ≤10MB） |
 | GET | `/api/resumes/{id}/pdf` | 在线预览源 PDF（`Content-Disposition: inline`） |
-| GET/POST | `/api/companies` · `/api/companies/import` · `/api/companies/resolve` | 公司 CRUD / txt 批量导入 / 名称自动补全（四级流水线） |
-| POST | `/api/companies/{id}/probe` · `/fetch` | 异步探测招聘入口 / 抓取岗位 |
+| GET/POST | `/api/companies` · `/api/companies/import` · `/api/companies/resolve` | 公司 CRUD（含已处理/未处理筛选） / txt 批量导入 / 名称自动补全（四级流水线） |
+| GET/POST | `/api/companies/{id}/jobs` · `/api/companies/batch-resolve` | 公司岗位列表（展开管理） / 批量补全（异步任务） |
 | GET | `/api/tasks/{job_id}` | 异步任务轮询 |
 | GET/POST | `/api/backup/export` · `/import` | JSON 全量备份 / merge/overwrite 恢复 |
 | GET | `/api/stats` | 投递漏斗/渠道/趋势统计 |
@@ -371,8 +364,8 @@ backend/
 ├── app/                    # 投递域（宿主）
 │   ├── main.py             # FastAPI 应用 + 安全中间件链
 │   ├── routes/schemas/services/dao/db/errors/config
-│   └── fetcher/            # probe 探测 / ATS 适配器 / 限速器 / 任务队列
-│       ├── ats/            # greenhouse / lever / feishu / jsonld 兜底
+│   └── fetcher/            # 公司补全四级流水线 / 限速器 / 任务队列
+│       ├── probe.py         # 招聘页候选探测（补全流水线内用）
 │       ├── icp.py resolve.py company_map*.json company_info_data.json   # 四级补全流水线
 │       └── normalize.py rate_limiter.py tasks.py http.py
 ├── market/                 # 市场域（原 JobPulse）
@@ -381,8 +374,8 @@ backend/
 │   ├── api/                # /api/market/* router
 │   └── cli.py              # crawl/etl/analyze/nlp/model/viz/report 一键流水线
 ├── migrations/             # 编号 SQL 迁移（schema_migrations 表管理）
-├── scripts/smoke.py        # 41 项冒烟断言
-└── tests/ tests_market/    # 130 + 151 项单测（含 26 个默认跳过的联网用例）
+├── scripts/smoke.py        # 37 项冒烟断言
+└── tests/ tests_market/    # 137 + 151 项单测（含 26 个默认跳过的联网用例）
 frontend/src/
 ├── views/                  # 看板/列表/公司库/简历×3/统计/设置 + 市场×3
 ├── components/             # KanbanColumn/JobCard/TimelinePanel/ResumeRenderer(A4)/PdfViewerDialog/StatusFlowDialog/...
@@ -408,7 +401,6 @@ npm run typecheck && npm test && npm run build      # 类型检查 / 单测 / �
 ```
 
 测试策略上的几个值得说的选择：
-- 抓取逻辑用**本地 mock 招聘站**做端到端验收（含 robots Disallow 降级、0 结果降级路径），不对真实站点做高频回归；
 - 薪资归一化等易碎函数以纯函数形式沉淀「坏例子即测试用例」；
 - 每次评审发现的缺陷修复都补充了对应断言（如 PUT 刷新 updated_at、Host 校验矩阵）。
 
@@ -425,14 +417,12 @@ npm run typecheck && npm test && npm run build      # 类型检查 / 单测 / �
 
 **规划中**
 - [ ] 时间趋势图：快照表就绪，积累 ≥2 个采集批次后启用
-- [ ] 抓取适配扩展：北森 / Moka / 大易 ATS 适配器（注册表机制已预留扩展点）
 - [ ] 面经管理与浏览器通知（备注直显已落地，通知未做）
 - [ ] ECharts 按需分包（当前首包 ~1.1MB，本地应用可接受）
 - [ ] 部署服务器时的真实鉴权升级（架构已预留：鉴权集中于中间件一处）
 
 **已知限制**
 - 简历打印分页效果因浏览器而异（Chromium 系最佳，属 PRD 明确接受范围）;
-- 飞书等 JS 强渲染站点解析成功率不稳定，失败自动降级手动录入;
 - 市场数据集中部分行业为「未标注」、少量公司名缺失（已在数据质量报告中量化）。
 
 ---
@@ -440,7 +430,7 @@ npm run typecheck && npm test && npm run build      # 类型检查 / 单测 / �
 ## 数据源与合规声明
 
 - **实时源**：国聘网、牛客网公开免登录 JSON 接口，仅低频拉取公开职位列表（随机延时 2~5s、限量翻页），不逆向、不绕过任何验证机制；
-- **公司官网抓取**：遵守 robots.txt（Disallow 即放弃），固定 UA 标识、串行低频访问，仅访问公开招聘页；
+- **自动补全搜索兜底**：仅抓取搜索结果页与候选官网首页做标题/正文校验，固定 UA 标识、串行低频访问（全局 ≤30 请求/分钟、同域 ≥1.5s）；
 - **兜底数据集**：GitHub 开源仓库 `Rayair019/Job-posting-data`（2025 年 BOSS直聘/智联/猎聘数据科学岗位文本）。该数据集无明确许可证，本项目仅作个人学习展示、**不二次分发数据文件**（需自行下载放置），商用请自行评估或替换；
 - **隐私**：简历等敏感材料仅存本机 SQLite，无遥测、无第三方统计脚本，备份导出仅在用户主动触发时生成。
 

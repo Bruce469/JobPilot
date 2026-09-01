@@ -3,10 +3,19 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from .fetcher.ats.base import JobCandidate
-
 
 # ---------------- 岗位 jobs ----------------
+class JobCandidate(BaseModel):
+    """岗位候选（岗位导入条目），字段即 jobs 表抓取字段。"""
+    position: str
+    city: Optional[str] = None
+    job_url: Optional[str] = None
+    source_job_id: Optional[str] = None
+    deadline: Optional[str] = None
+    degree: Optional[str] = None
+    job_type: Optional[str] = None  # 校招/社招/实习
+
+
 class JobCreate(BaseModel):
     company: str
     company_id: Optional[str] = None
@@ -134,14 +143,20 @@ class CompanyUpdate(BaseModel):
     city: Optional[str] = None
     nature: Optional[str] = None
     notes: Optional[str] = None
+    processed: Optional[bool] = None  # 已处理/未处理标签（True=已处理）
 
 
-class CompanyFetchIn(BaseModel):
-    career_url: Optional[str] = None  # 不传则用公司已存 career_url
+class CompanyImportItem(BaseModel):
+    name: str
+    city: Optional[str] = None
+    industry: Optional[str] = None
+    nature: Optional[str] = None
+    website: Optional[str] = None
 
 
 class CompanyImportIn(BaseModel):
-    names: list[str] = Field(default_factory=list)  # txt 按行拆出的公司名列表
+    companies: list[CompanyImportItem] = Field(default_factory=list)  # txt 按行拆出的公司信息（名称+可选属性）
+    names: list[str] = Field(default_factory=list)  # 兼容旧版：仅公司名列表
     resolve: bool = False                            # 是否创建后异步批量自动补全
 
 
@@ -167,6 +182,7 @@ class BackupCompanyItem(BaseModel):
     notes: Optional[str] = None
     last_fetched_at: Optional[str] = None
     last_fetch_result: Optional[str] = None
+    processed: Optional[int] = None  # 0=未处理 1=已处理；旧备份缺失时导入默认未处理
     created_at: Optional[str] = None
 
 

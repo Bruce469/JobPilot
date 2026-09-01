@@ -1,31 +1,39 @@
-// 公司库 store：CRUD + probe/fetch 异步任务轮询
+// 公司库 store：CRUD + resolve 异步任务轮询
 import { defineStore } from 'pinia'
-import { reactive, ref } from 'vue'
+import { ref } from 'vue'
 import {
   batchDeleteCompanies,
-  batchProbeCompanies,
   batchResolveCompanies,
   createCompany as apiCreateCompany,
   deleteCompany as apiDeleteCompany,
-  fetchCompanyJobs as apiFetchCompanyJobs,
   importCompanies as apiImportCompanies,
   listCompanies,
-  probeCompany as apiProbeCompany,
   resolveCompany as apiResolveCompany,
   resolveCompanyName as apiResolveName,
   updateCompany as apiUpdateCompany,
 } from '@/api/companies'
 import type { ImportCompaniesResult } from '@/api/companies'
 import type { CompanyFilters } from '@/api/companies'
+import { getCompanyFacets } from '@/api/companies'
 import { getTask } from '@/api/tasks'
 import { ApiError } from '@/api/http'
-import type { Company, CompanyPayload, CompanyResolveResult, TaskResult } from '@/types'
+import type { Company, CompanyFacets, CompanyImportRow, CompanyPayload, CompanyResolveResult, TaskResult } from '@/types'
 
 export const useCompaniesStore = defineStore('companies', () => {
   const items = ref<Company[]>([])
   const loading = ref(false)
-  // 进行中的任务状态（companyId -> 任务类型/进度文本）
-  const running = reactive<Record<string, { type: 'probe' | 'fetch'; jobId: string }>>({})
+  // 公司库筛选候选池（DB distinct 值；城市/行业多选弹窗用）
+  const facets = ref<CompanyFacets>({ cities: [], industries: [], natures: [] })
+  // 会话内只拉一次，除非 force 主动刷新
+  let facetsLoaded = false
+
+  async function fetchFacets(force = false): Promise<CompanyFacets> {
+    if (facetsLoaded && !force) return facets.value
+    const data = await getCompanyFacets()
+    facets.value = data
+    facetsLoaded = true
+    return facets.value
+  }
 
   async function fetchCompanies(filters?: CompanyFilters) {
     loading.value = true
@@ -59,7 +67,6 @@ export const useCompaniesStore = defineStore('companies', () => {
   async function deleteCompany(id: string) {
     await apiDeleteCompany(id)
     items.value = items.value.filter((x) => x.id !== id)
-    delete running[id]
   }
 
   /** 批量删除公司（岗位保留、解除关联），成功后本地移除 */
@@ -67,14 +74,7 @@ export const useCompaniesStore = defineStore('companies', () => {
     const res = await batchDeleteCompanies(ids)
     const gone = new Set(ids)
     items.value = items.value.filter((x) => !gone.has(x.id))
-    ids.forEach((id) => delete running[id])
     return res
-  }
-
-  /** 批量探测招聘页（提交异步任务，进度由调用方轮询 pollTask） */
-  async function batchProbe(ids: string[]): Promise<string> {
-    const { job_id } = await batchProbeCompanies(ids)
-    return job_id
   }
 
   /** 批量补全已存公司（提交异步任务，进度由调用方轮询 pollTask） */
@@ -83,21 +83,9 @@ export const useCompaniesStore = defineStore('companies', () => {
     return job_id
   }
 
-  async function probe(id: string): Promise<string> {
-    const { job_id } = await apiProbeCompany(id)
-    running[id] = { type: 'probe', jobId: job_id }
-    return job_id
-  }
-
-  async function fetchJobs(id: string, careerUrl?: string): Promise<string> {
-    const { job_id } = await apiFetchCompanyJobs(id, careerUrl)
-    running[id] = { type: 'fetch', jobId: job_id }
-    return job_id
-  }
-
-  /** 批量导入（resolve=false 同步新增 / resolve=true 返回 job_id 由组件轮询） */
-  function importCompanies(names: string[], resolve?: boolean): Promise<ImportCompaniesResult> {
-    return apiImportCompanies(names, resolve)
+  /** 批量导入（结构化条目；resolve=true 返回 job_id 由组件轮询） */
+  function importCompanies(rows: CompanyImportRow[], resolve?: boolean): Promise<ImportCompaniesResult> {
+    return apiImportCompanies(rows, resolve)
   }
 
   /** 按名称查询补全（不落库） */
@@ -157,16 +145,14 @@ export const useCompaniesStore = defineStore('companies', () => {
   return {
     items,
     loading,
-    running,
+    facets,
+    fetchFacets,
     fetchCompanies,
     createCompany,
     updateCompany,
     deleteCompany,
     batchDelete,
-    batchProbe,
     batchResolve,
-    probe,
-    fetchJobs,
     importCompanies,
     resolveName,
     resolveCompany,

@@ -4,7 +4,7 @@ import sqlite3
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from . import config, dao, db, util
 from .errors import APIError, conflict, import_error, not_found, validation_error
@@ -307,6 +307,20 @@ def list_companies(filters: dict | None = None) -> dict:
     return {"items": items, "total": len(items)}
 
 
+def list_company_jobs(company_id: str) -> dict:
+    """GET /api/companies/{id}/jobs：该公司全部岗位（展开列表数据源）。"""
+    company = dao.get_company(company_id)
+    if not company:
+        raise not_found("公司", company_id)
+    items = dao.list_jobs_by_company(company_id)
+    return {"items": items, "total": len(items)}
+
+
+def company_facets() -> dict:
+    """公司库筛选候选池（cities/industries/natures），透传 dao。"""
+    return dao.company_facets()
+
+
 def create_company(payload: dict) -> dict:
     name = str(payload.get("name") or "").strip()
     website = str(payload.get("website") or "").strip()
@@ -351,13 +365,6 @@ def batch_delete_companies(ids: list) -> int:
     return dao.batch_delete_companies(ids)
 
 
-def submit_batch_probe(ids: list) -> str:
-    """提交批量探测任务（POST /api/companies/batch-probe），返回 job_id。"""
-    if not ids:
-        raise validation_error("请先勾选要探测的公司")
-    return fetcher_tasks.submit("probe_batch", {"company_ids": list(ids)})
-
-
 def submit_batch_resolve(ids: list) -> str:
     """提交批量补全任务（POST /api/companies/batch-resolve），返回 job_id。
 
@@ -368,33 +375,67 @@ def submit_batch_resolve(ids: list) -> str:
     return fetcher_tasks.submit("resolve", {"company_ids": list(ids)})
 
 
-def import_companies(names: list, resolve: bool = False) -> dict:
+# 明显不属于属性内容的占位词（如「官网未公开」），导入时视为缺失置空
+_IMPORT_PLACEHOLDERS = {"", "-", "—", "–", "/", "\\", "无", "没有", "未知", "未公开", "官网未公开",
+                        "暂无", "不详", "缺失", "待补充", "待定", "n/a", "na", "null", "none", "unknown"}
+
+
+def _clean_import_field(value) -> Optional[str]:
+    """清洗导入字段：去首尾空格；空值或占位词（官网未公开、无、- 等）返回 None。"""
+    text = str(value or "").strip()
+    if text.lower() in _IMPORT_PLACEHOLDERS:
+        return None
+    return text or None
+
+
+def import_companies(companies: list, resolve: bool = False) -> dict:
     """公司批量导入（PRD 4.12）：按行去空、批内归一化去重、跳过已存在（归一化匹配）。
 
+    companies 为结构化条目列表 {name, city, industry, nature, website}（兼容旧版纯公司名字符串）；
+    属性可缺失或为占位词（如「官网未公开」），统一清洗后置空。
     resolve=False 同步返回 {added, skipped, skipped_names, added_ids}；
     resolve=True 在创建后提交异步批量补全任务，附加返回 job_id（补全结果不落库）。
     """
-    clean = [str(n or "").strip() for n in names]
-    clean = [n for n in clean if n]
-    if not clean:
+    items = []
+    for row in companies:
+        if isinstance(row, str):  # 兼容旧版纯公司名名单
+            row = {"name": row}
+        name = _clean_import_field(row.get("name"))
+        if not name:
+            continue
+        items.append({
+            "name": name,
+            "city": _clean_import_field(row.get("city")),
+            "industry": _clean_import_field(row.get("industry")),
+            "nature": _clean_import_field(row.get("nature")),
+            "website": _clean_import_field(row.get("website")),
+        })
+    if not items:
         raise validation_error("公司名单不能为空")
     existing = dao.list_companies()
     existing_norm = {normalize.normalize_company(c["name"]): c for c in existing}
     added = skipped = 0
     added_ids, skipped_names = [], []
     seen = set()
-    for name in clean:
-        norm = normalize.normalize_company(name)
+    for item in items:
+        norm = normalize.normalize_company(item["name"])
         if norm in seen:  # 批内归一化重名（含首尾空格差异）
             skipped += 1
-            skipped_names.append(name)
+            skipped_names.append(item["name"])
             continue
         seen.add(norm)
         if norm in existing_norm:  # 与已有公司归一化重名
             skipped += 1
-            skipped_names.append(name)
+            skipped_names.append(item["name"])
             continue
-        company = dao.create_company({"name": name, "website": "", "probe_status": "未探测"})
+        company = dao.create_company({
+            "name": item["name"],
+            "website": item["website"] or "",
+            "city": item["city"],
+            "industry": item["industry"],
+            "nature": item["nature"],
+            "probe_status": "未探测",
+        })
         added += 1
         added_ids.append(company["id"])
     result = {"added": added, "skipped": skipped, "skipped_names": skipped_names, "added_ids": added_ids}

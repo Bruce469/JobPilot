@@ -1,6 +1,6 @@
 """异步任务（架构 5.5 / ADR-3）：内存任务表 + 单个后台工作线程 + 串行执行。
 
-probe/fetch 返回 202 + job_id，前端轮询 GET /api/tasks/{job_id}。
+resolve 批量补全返回 202 + job_id，前端轮询 GET /api/tasks/{job_id}。
 """
 import logging
 import queue
@@ -8,10 +8,7 @@ import threading
 import time
 
 from .. import dao, util
-from . import ats as ats_mod
-from . import probe as probe_mod
-from .errors import FetchError, RobotsDisallowed, TaskTimeout
-from .http import fetch, robots_allowed
+from .errors import TaskTimeout
 
 logger = logging.getLogger("app.fetcher")
 
@@ -82,24 +79,14 @@ def _run_task(job_id: str, payload: dict) -> None:
     task["status"] = "running"
     task["progress"] = "开始"
     start = time.monotonic()
-    # 批量任务（resolve/probe_batch 带 company_ids）：每家公司独立 60s 预算，总预算封顶 30 分钟
+    # 批量补全任务（resolve 带 company_ids）：每家公司独立 60s 预算，总预算封顶 30 分钟
     company_ids = payload.get("company_ids") or []
-    is_batch = task["type"] in ("resolve", "probe_batch") and company_ids
+    is_batch = task["type"] == "resolve" and company_ids
     budget = min(len(company_ids), MAX_BATCH_UNITS) * TASK_TIMEOUT if is_batch else TASK_TIMEOUT
     deadline = start + budget
     try:
-        if task["type"] == "probe":
-            task["result"] = _run_probe(payload, deadline)
-            task["progress"] = "完成"
-        elif task["type"] == "probe_batch":
-            task["result"] = _run_probe_batch(payload, deadline, task)
-            task["progress"] = "完成"
-        elif task["type"] == "resolve":
-            task["result"] = _run_resolve(payload, deadline, task)
-            task["progress"] = "完成"
-        else:
-            task["result"] = _run_fetch(payload, deadline)
-            task["progress"] = "完成"
+        task["result"] = _run_resolve(payload, deadline, task)
+        task["progress"] = "完成"
         # 批量任务留一个单任务预算的容差：最后一家公司可能因在途请求越过总预算，
         # 单家超时会中断该家并保留已完成部分，不应把整个批量判为超时。
         if time.monotonic() - start > budget + (TASK_TIMEOUT if is_batch else 0):
@@ -108,128 +95,13 @@ def _run_task(job_id: str, payload: dict) -> None:
     except TaskTimeout:
         task["status"] = "failed"
         task["progress"] = "超时"
-        task["error"] = {"code": "TIMEOUT", "message": f"任务超时（>{budget:.0f}s），已降级为手动录入"}
-        _mark_company(payload, probe_status="需人工", fetch_result="超时，请手动录入")
-    except RobotsDisallowed:
-        task["status"] = "failed"
-        task["progress"] = "robots 禁止"
-        task["error"] = {"code": "ROBOTS_DISALLOW", "message": "robots.txt 禁止抓取"}
-        _mark_company(payload, probe_status="需人工", fetch_result="robots 禁止抓取")
-    except FetchError as exc:
-        task["status"] = "failed"
-        task["error"] = {"code": exc.code, "message": exc.message}
-        if exc.mark_manual:
-            _mark_company(payload, probe_status="需人工")
-
-
-def _mark_company(payload: dict, probe_status: str | None = None, fetch_result: str | None = None) -> None:
-    cid = payload.get("company_id")
-    if not cid:
-        return
-    updates = {}
-    if probe_status:
-        updates["probe_status"] = probe_status
-    if fetch_result:
-        updates["last_fetch_result"] = fetch_result
-        updates["last_fetched_at"] = util.now_iso()
-    if updates:
-        dao.update_company(cid, updates)
+        task["error"] = {"code": "TIMEOUT", "message": f"任务超时（>{budget:.0f}s），部分公司可能未补全"}
 
 
 def _company_deadline(deadline: float | None) -> float:
     """批量任务中单家公司的预算：不超过任务总 deadline，且最多再给一个单任务预算。"""
     fresh = time.monotonic() + TASK_TIMEOUT
     return min(deadline, fresh) if deadline else fresh
-
-
-def _run_probe(payload: dict, deadline: float) -> dict:
-    company = dao.get_company(payload["company_id"])
-    if not company:
-        raise FetchError("COMPANY_NOT_FOUND", "公司不存在", mark_manual=False)
-    candidates, code, msg = probe_mod.probe_company(company["website"], deadline)
-    if code:
-        raise FetchError(code, msg)
-    updates = {"probe_status": "成功" if candidates else "需人工"}
-    if candidates and not company.get("career_url"):
-        # 最高置信度候选写入 career_url，仍可人工修正后复用
-        updates["career_url"] = candidates[0]["url"]
-    dao.update_company(company["id"], updates)
-    return {"candidates": candidates}
-
-
-def _run_probe_batch(payload: dict, deadline: float, task: dict) -> dict:
-    """批量探测：逐公司探测招聘页并写库（probe_status / 缺失时写最佳候选 career_url）。
-
-    与单条探测语义一致：有候选置「成功」、无候选置「需人工」、异常记 failed 不阻塞其余；
-    已探测成功（probe_status=成功）的公司跳过，节省网络与限速预算。
-    """
-    company_ids = payload.get("company_ids") or []
-    total = len(company_ids)
-    results = []
-    ok = manual = failed = skipped = 0
-    for i, cid in enumerate(company_ids):
-        task["progress"] = f"已探测 {i}/{total}"
-        company = dao.get_company(cid)
-        if not company:
-            failed += 1
-            results.append({"company_id": cid, "name": None, "status": "failed", "error": "公司不存在"})
-            continue
-        if company.get("probe_status") == "成功":
-            skipped += 1
-            results.append({"company_id": cid, "name": company["name"], "status": "skipped",
-                            "career_url": company.get("career_url")})
-            continue
-        try:
-            candidates, code, msg = probe_mod.probe_company(company["website"], _company_deadline(deadline))
-            if code:
-                raise FetchError(code, msg)
-            updates = {"probe_status": "成功" if candidates else "需人工"}
-            if candidates and not company.get("career_url"):
-                updates["career_url"] = candidates[0]["url"]
-            dao.update_company(company["id"], updates)
-            if candidates:
-                ok += 1
-            else:
-                manual += 1
-            results.append({
-                "company_id": cid, "name": company["name"],
-                "status": "成功" if candidates else "需人工",
-                "career_url": candidates[0]["url"] if candidates else None,
-            })
-        except Exception as exc:  # 单公司失败不阻塞其余，置「需人工」等待人工处理
-            logger.exception("单公司探测异常 cid=%s", cid)
-            failed += 1
-            dao.update_company(cid, {"probe_status": "需人工"})
-            results.append({"company_id": cid, "name": company["name"], "status": "failed", "error": str(exc)})
-    task["progress"] = f"已探测 {total}/{total}"
-    return {"results": results, "ok": ok, "manual": manual, "failed": failed, "skipped": skipped, "total": total}
-
-
-def _run_fetch(payload: dict, deadline: float) -> dict:
-    company = dao.get_company(payload["company_id"])
-    if not company:
-        raise FetchError("COMPANY_NOT_FOUND", "公司不存在", mark_manual=False)
-    url = str(payload.get("career_url") or company.get("career_url") or "").strip()
-    if not url:
-        raise FetchError("NO_CAREER_URL", "公司尚未配置招聘页链接，请先探测或手动填写", mark_manual=False)
-    if not robots_allowed(url, deadline):
-        raise RobotsDisallowed()
-    html = fetch(url, deadline).text
-    ats_name, adapter = ats_mod.detect_ats(url, html)
-    candidates = adapter.extract_jobs(html, url)
-    updates = {"ats_type": ats_name, "last_fetched_at": util.now_iso(), "probe_status": "成功"}
-    if candidates:
-        updates["last_fetch_result"] = f"解析到 {len(candidates)} 条岗位"
-    else:
-        updates["probe_status"] = "需人工"
-        updates["last_fetch_result"] = "解析 0 条岗位，请手动录入"
-    dao.update_company(company["id"], updates)
-    return {
-        "ats_type": ats_name,
-        "career_url": url,
-        "job_candidates": [c.model_dump() for c in candidates],
-        "count": len(candidates),
-    }
 
 
 def _run_resolve(payload: dict, deadline: float, task: dict) -> dict:

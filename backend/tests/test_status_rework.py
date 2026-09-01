@@ -53,9 +53,9 @@ def test_migration_006_merges_screening_status(tmp_path, monkeypatch):
                 " VALUES (?, ?, ?, ?, ?)",
                 ("j-screening", "A公司", "简历筛选", "2026-08-01T00:00:00", "2026-08-01T00:00:00"),
             )
-    # 3) 升级到 006
+    # 3) 升级到最新版本（当前 007；断言 >=6 保证后续新增迁移不再破坏本用例）
     db.migrate()
-    assert db.current_schema_version() == 6
+    assert db.current_schema_version() >= 6
     job = get_job("j-screening")
     assert job["status"] == "已投递"  # 当前状态归一
     for col in ("next_time", "fail_stage", "last_note", "last_note_at"):

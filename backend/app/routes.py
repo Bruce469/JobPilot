@@ -139,11 +139,22 @@ def list_companies(
     city: Optional[str] = None,
     industry: Optional[str] = None,
     nature: Optional[str] = None,
+    processed: Optional[int] = None,
     keyword: Optional[str] = None,
 ):
+    # city/industry 逗号分隔多值（与 list_jobs 的 status 一致），split 后去空格去空项
+    city_list = [c.strip() for c in city.split(",") if c.strip()] if city else None
+    industry_list = [i.strip() for i in industry.split(",") if i.strip()] if industry else None
     return services.list_companies({
-        "city": city, "industry": industry, "nature": nature, "keyword": keyword,
+        "city": city_list, "industry": industry_list, "nature": nature,
+        "processed": processed, "keyword": keyword,
     })
+
+
+@router.get("/companies/facets")
+def list_company_facets():
+    """公司库筛选候选池：{cities, industries, natures} 各为 DISTINCT 非空值排序列表。"""
+    return services.company_facets()
 
 
 @router.post("/companies", status_code=201)
@@ -153,7 +164,9 @@ def create_company(body: schemas.CompanyIn):
 
 @router.post("/companies/import")
 def import_companies(body: schemas.CompanyImportIn):
-    return services.import_companies(body.names, body.resolve)
+    # 优先结构化条目（名称+城市/行业/性质/官网），为空时兼容旧版纯公司名列表
+    items = [c.model_dump() for c in body.companies] or list(body.names)
+    return services.import_companies(items, body.resolve)
 
 
 @router.post("/companies/resolve")
@@ -166,36 +179,21 @@ def batch_delete_companies(body: schemas.BatchDelete):
     return {"deleted": services.batch_delete_companies(body.ids)}
 
 
-@router.post("/companies/batch-probe", status_code=202)
-def batch_probe_companies(body: schemas.CompanyBatchIn):
-    job_id = services.submit_batch_probe(body.ids)
-    return {"job_id": job_id, "type": "probe_batch"}
-
-
 @router.post("/companies/batch-resolve", status_code=202)
 def batch_resolve_companies(body: schemas.CompanyBatchIn):
     job_id = services.submit_batch_resolve(body.ids)
     return {"job_id": job_id, "type": "resolve"}
 
 
-@router.post("/companies/{company_id}/probe", status_code=202)
-def probe_company(company_id: str):
-    services.get_company(company_id)
-    job_id = fetcher_tasks.submit("probe", {"company_id": company_id})
-    return {"job_id": job_id, "type": "probe"}
-
-
-@router.post("/companies/{company_id}/fetch", status_code=202)
-def fetch_company_jobs(company_id: str, body: Optional[schemas.CompanyFetchIn] = None):
-    services.get_company(company_id)
-    career_url = body.career_url if body else None
-    job_id = fetcher_tasks.submit("fetch", {"company_id": company_id, "career_url": career_url})
-    return {"job_id": job_id, "type": "fetch"}
-
-
 @router.post("/companies/{company_id}/resolve")
 def resolve_existing_company(company_id: str):
     return services.resolve_company_for_id(company_id)
+
+
+@router.get("/companies/{company_id}/jobs")
+def list_company_jobs(company_id: str):
+    """该公司全部岗位（公司库展开列表数据源）。"""
+    return services.list_company_jobs(company_id)
 
 
 @router.get("/companies/{company_id}")

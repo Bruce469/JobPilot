@@ -2,11 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useCompaniesStore } from '@/stores/companies'
-import type { BatchProbeResult, Company, CompanyResolveResult } from '@/types'
+import type { Company, CompanyResolveResult } from '@/types'
 
 const props = defineProps<{
   modelValue: boolean
-  mode: 'probe' | 'resolve'
   companies: Company[]
 }>()
 
@@ -23,18 +22,14 @@ const submitting = ref(false)
 const progress = ref<{ done: number; total: number } | null>(null)
 const progressText = ref('')
 const queueLength = ref(0)
-const probeResult = ref<BatchProbeResult | null>(null)
 const resolveResult = ref<{ ok: number; skipped: number; failed: CompanyResolveResult[] } | null>(null)
 
-/** 实际需要处理的公司：补全只处理信息缺失的，探测只处理未探测成功的（其余自动跳过） */
+/** 实际需要补全的公司：信息完整（官网/行业/招聘页/城市/性质）的自动跳过 */
 const targetCompanies = computed(() =>
-  isProbe.value
-    ? props.companies.filter((c) => c.probe_status !== '成功')
-    : props.companies.filter((c) => !c.website || !c.industry || !c.career_url || !c.city || !c.nature),
+  props.companies.filter((c) => !c.website || !c.industry || !c.career_url || !c.city || !c.nature),
 )
 const skipCount = computed(() => props.companies.length - targetCompanies.value.length)
 const ids = computed(() => targetCompanies.value.map((c) => c.id))
-const isProbe = computed(() => props.mode === 'probe')
 const queued = computed(() => queueLength.value > 1)
 
 watch(
@@ -46,7 +41,6 @@ watch(
     progress.value = null
     progressText.value = ''
     queueLength.value = 0
-    probeResult.value = null
     resolveResult.value = null
   },
 )
@@ -69,9 +63,7 @@ async function onConfirm() {
   if (!ids.value.length) return
   submitting.value = true
   try {
-    const jobId = isProbe.value
-      ? await companiesStore.batchProbe(ids.value)
-      : await companiesStore.batchResolve(ids.value)
+    const jobId = await companiesStore.batchResolve(ids.value)
     step.value = 'running'
     progress.value = null
     progressText.value = '排队中'
@@ -84,25 +76,18 @@ async function onConfirm() {
         queueLength.value = t.queue_length ?? 0
       },
     })
-    if (isProbe.value) {
-      const r = task.result as unknown as BatchProbeResult
-      probeResult.value = r
-      if (r.failed) ElMessage.warning(`探测完成：成功 ${r.ok} 家，需人工 ${r.manual} 家，失败 ${r.failed} 家${r.skipped ? `，跳过 ${r.skipped} 家` : ''}`)
-      else ElMessage.success(`探测完成：成功 ${r.ok} 家${r.manual ? `，需人工 ${r.manual} 家` : ''}${r.skipped ? `，跳过 ${r.skipped} 家` : ''}`)
-    } else {
-      const details = (task.result as { results?: CompanyResolveResult[] })?.results ?? []
-      const ok = details.filter((d) => d.source !== 'failed' && d.source !== 'skipped').length
-      const skipped = details.filter((d) => d.source === 'skipped').length
-      const failed = details.filter((d) => d.source === 'failed')
-      resolveResult.value = { ok, skipped, failed }
-      if (failed.length) ElMessage.warning(`补全完成：成功 ${ok} 家，失败 ${failed.length} 家${skipped ? `，跳过 ${skipped} 家` : ''}`)
-      else ElMessage.success(`补全完成：成功 ${ok} 家${skipped ? `，跳过 ${skipped} 家` : ''}`)
-    }
+    const details = (task.result as { results?: CompanyResolveResult[] } | null)?.results ?? []
+    const ok = details.filter((d) => d.source !== 'failed' && d.source !== 'skipped').length
+    const skipped = details.filter((d) => d.source === 'skipped').length
+    const failed = details.filter((d) => d.source === 'failed')
+    resolveResult.value = { ok, skipped, failed }
+    if (failed.length) ElMessage.warning(`补全完成：成功 ${ok} 家，失败 ${failed.length} 家${skipped ? `，跳过 ${skipped} 家` : ''}`)
+    else ElMessage.success(`补全完成：成功 ${ok} 家${skipped ? `，跳过 ${skipped} 家` : ''}`)
     step.value = 'result'
     emit('done')
   } catch (e) {
     if (step.value === 'running') step.value = 'confirm'
-    ElMessage.error(e instanceof Error ? e.message : '批量操作失败')
+    ElMessage.error(e instanceof Error ? e.message : '批量补全失败')
   } finally {
     submitting.value = false
   }
@@ -116,7 +101,7 @@ function close() {
 <template>
   <el-dialog
     :model-value="modelValue"
-    :title="isProbe ? '批量探测' : '批量补全'"
+    title="批量补全"
     width="560px"
     :close-on-click-modal="false"
     :close-on-press-escape="!submitting"
@@ -125,14 +110,11 @@ function close() {
   >
     <!-- 步骤一：确认 -->
     <div v-if="step === 'confirm'">
-      <p class="hint" v-if="isProbe">
-        将对选中的 <b>{{ companies.length }}</b> 家公司中未探测成功的 <b>{{ targetCompanies.length }}</b> 家逐家探测招聘入口：写入探测状态，缺失招聘页链接时自动填入探测到的最佳候选。预计每家企业约 10~60 秒，期间请勿关闭页面。
-      </p>
-      <p class="hint" v-else>
+      <p class="hint">
         将自动补全选中的 <b>{{ companies.length }}</b> 家公司中信息缺失的 <b>{{ targetCompanies.length }}</b> 家（官网 / 行业 / 招聘页链接 / 城市 / 公司性质，仅填充缺失字段，不覆盖已有数据）。每家公司约需 5~30 秒，期间请勿关闭页面。
       </p>
       <p v-if="skipCount" class="skip-hint">
-        {{ skipCount }} 家{{ isProbe ? '已探测成功' : '信息已完整' }}，自动跳过。
+        {{ skipCount }} 家信息已完整，自动跳过。
       </p>
       <p v-if="!targetCompanies.length" class="skip-hint">
         所选公司均无需处理，可直接取消。
@@ -150,33 +132,18 @@ function close() {
           排队中：前面还有 {{ queueLength - 1 }} 个任务正在处理，完成后自动开始…
         </template>
         <template v-else>
-          {{ progressText || (progress ? `${isProbe ? '已探测' : '已补全'} ${progress.done} / ${progress.total}` : '任务排队中…') }}
+          {{ progressText || (progress ? `已补全 ${progress.done} / ${progress.total}` : '任务排队中…') }}
         </template>
       </div>
       <p v-if="progress && !queued" class="hint">
-        {{ isProbe ? '正在探测第' : '正在补全第' }} {{ progress.done + 1 }} 家（共 {{ progress.total }} 家），每家约需 5~60 秒，请耐心等待。
+        正在补全第 {{ progress.done + 1 }} 家（共 {{ progress.total }} 家），每家约需 5~30 秒，请耐心等待。
       </p>
       <p v-else-if="queued" class="hint">批量任务串行执行，前面任务完成后本任务自动开始。</p>
     </div>
 
     <!-- 步骤三：结果 -->
     <div v-else-if="step === 'result'">
-      <template v-if="isProbe && probeResult">
-        <div class="summary-line">
-          <span class="ok-count">成功 {{ probeResult.ok }} 家</span>
-          <span v-if="probeResult.manual" class="skip-count">需人工 {{ probeResult.manual }} 家</span>
-          <span v-if="probeResult.skipped" class="skip-count">跳过 {{ probeResult.skipped }} 家</span>
-          <span v-if="probeResult.failed" class="fail-count">失败 {{ probeResult.failed }} 家</span>
-        </div>
-        <div class="done-hint">探测结果已写入公司库（探测状态 / 招聘页链接），可在列表中「编辑」修正。</div>
-        <div v-if="probeResult.failed" class="fail-list">
-          <div v-for="(d, i) in probeResult.results.filter((x) => x.status === 'failed')" :key="i" class="fail-item">
-            <span class="fail-name">{{ d.name }}</span>
-            <span class="fail-reason">{{ d.error || '探测失败' }}</span>
-          </div>
-        </div>
-      </template>
-      <template v-else-if="!isProbe && resolveResult">
+      <template v-if="resolveResult">
         <div class="summary-line">
           <span class="ok-count">成功补全 {{ resolveResult.ok }} 家</span>
           <span v-if="resolveResult.skipped" class="skip-count">跳过 {{ resolveResult.skipped }} 家</span>
@@ -201,7 +168,7 @@ function close() {
         :disabled="!targetCompanies.length"
         @click="onConfirm"
       >
-        {{ isProbe ? '开始探测' : '开始补全' }}
+        开始补全
       </el-button>
       <el-button v-if="step === 'result'" type="primary" @click="close">完成</el-button>
     </template>
